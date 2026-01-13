@@ -1,5 +1,7 @@
 # Queen
 
+<img align="right" width="125" src="assets/queen_logo.png">
+
 **Database migrations for Go.**
 
 Queen is a database migration library that lets you define migrations in code, not separate files. It supports both SQL and Go function migrations, with built-in testing helpers and a simple, idiomatic API.
