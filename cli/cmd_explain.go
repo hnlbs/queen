@@ -49,12 +49,14 @@ Examples:
 			if app.config.JSON {
 				return app.outputExplainJSON(plan)
 			}
-			return app.outputExplainTable(plan)
+
+			app.outputExplainTable(plan)
+			return nil
 		},
 	}
 }
 
-func (app *App) outputExplainTable(plan *queen.MigrationPlan) error {
+func (app *App) outputExplainTable(plan *queen.MigrationPlan) {
 	fmt.Printf("Migration: %s\n", plan.Version)
 	fmt.Println(strings.Repeat("━", 60))
 	fmt.Println()
@@ -91,8 +93,6 @@ func (app *App) outputExplainTable(plan *queen.MigrationPlan) error {
 		fmt.Println()
 		fmt.Printf("%s: Go function (code not shown)\n", strings.ToUpper(plan.Direction))
 	}
-
-	return nil
 }
 
 func (app *App) outputExplainJSON(plan *queen.MigrationPlan) error {

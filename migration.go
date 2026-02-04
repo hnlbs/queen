@@ -129,7 +129,7 @@ type M = Migration
 
 // Validate ensures Version, Name, and at least one Up method are defined.
 func (m *Migration) Validate() error {
-	if m.Version == "" || strings.Contains(m.Version, " ") || !IsValidMigrationName(m.Version){
+	if m.Version == "" || strings.Contains(m.Version, " ") || !IsValidMigrationName(m.Version) {
 		return ErrInvalidMigration
 	}
 
