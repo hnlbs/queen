@@ -1,25 +1,4 @@
 // Package cli provides a command-line interface for Queen migrations.
-//
-// The CLI allows users to manage database migrations through a simple
-// command-line tool. Users create their own binary that imports their
-// migrations and calls cli.Run().
-//
-// Example usage:
-//
-//	// cmd/migrate/main.go
-//	package main
-//
-//	import (
-//	    "github.com/honeynil/queen/cli"
-//	    "myapp/migrations"
-//	)
-//
-//	func main() {
-//	    cli.Run(migrations.Register)
-//	}
-//
-// The CLI supports configuration through flags, environment variables,
-// and an optional .queen.yaml config file.
 package cli
 
 import (
@@ -33,14 +12,11 @@ import (
 )
 
 // RegisterFunc is a function that registers migrations with Queen.
-// Users provide this function to register all their migrations.
 type RegisterFunc func(*queen.Queen)
 
 // DBOpener is a function that opens a database connection.
-// It receives the DSN (data source name) and returns a *sql.DB.
 type DBOpener func(dsn string) (*sql.DB, error)
 
-// Default table name for migrations.
 const DefaultTableName = "queen_migrations"
 
 // App holds the CLI application state.
@@ -52,18 +28,11 @@ type App struct {
 }
 
 // Run starts the CLI with the given migration registration function.
-// This is the main entry point for users.
-//
-// Configuration priority:
-//  1. Command-line flags (highest)
-//  2. Environment variables
-//  3. Config file .queen.yaml (lowest, requires --use-config)
 func Run(register RegisterFunc) {
 	RunWithDB(register, nil)
 }
 
 // RunWithDB starts the CLI with a custom database opener.
-// If dbOpener is nil, uses sql.Open with the driver name.
 func RunWithDB(register RegisterFunc, dbOpener DBOpener) {
 	app := &App{
 		registerFunc: register,
@@ -72,30 +41,8 @@ func RunWithDB(register RegisterFunc, dbOpener DBOpener) {
 	}
 
 	app.rootCmd = &cobra.Command{
-		Use:   "queen",
-		Short: "Queen migration CLI",
-		Long: `Queen migration CLI - Database migrations for Go.
-
-Configuration priority:
-  1. Command-line flags (highest)
-  2. Environment variables (QUEEN_DRIVER, QUEEN_DSN, etc.)
-  3. Config file .queen.yaml (lowest, requires --use-config)
-
-Examples:
-  # Apply all pending migrations
-  queen up
-
-  # Apply next 3 migrations
-  queen up --steps 3
-
-  # Rollback last migration
-  queen down
-
-  # Show migration status
-  queen status
-
-  # Create new migration
-  queen create add_users_table`,
+		Use:           "queen",
+		Short:         "Queen migration CLI",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -109,7 +56,6 @@ Examples:
 	}
 }
 
-// addGlobalFlags adds flags that are available to all commands.
 func (app *App) addGlobalFlags() {
 	flags := app.rootCmd.PersistentFlags()
 
@@ -125,7 +71,6 @@ func (app *App) addGlobalFlags() {
 	flags.BoolVar(&app.config.Verbose, "verbose", false, "Verbose output")
 }
 
-// addCommands registers all CLI commands.
 func (app *App) addCommands() {
 	app.rootCmd.AddCommand(
 		app.createCmd(),
@@ -137,10 +82,20 @@ func (app *App) addCommands() {
 		app.versionCmd(),
 		app.planCmd(),
 		app.explainCmd(),
+		app.logCmd(),
+		app.gotoCmd(),
+		app.gapCmd(),
+		app.diffCmd(),
+		app.doctorCmd(),
+		app.checkCmd(),
+		app.initCmd(),
+		app.squashCmd(),
+		app.baselineCmd(),
+		app.importCmd(),
+		app.tuiCmd(),
 	)
 }
 
-// setupQueen creates a Queen instance with the current configuration.
 func (app *App) setupQueen(ctx context.Context) (*queen.Queen, error) {
 	if err := app.loadConfig(); err != nil {
 		return nil, err
@@ -190,8 +145,6 @@ func (app *App) setupQueen(ctx context.Context) (*queen.Queen, error) {
 	return q, nil
 }
 
-// loadConfig loads configuration from all sources.
-// Priority: flags > env > config file.
 func (app *App) loadConfig() error {
 	if app.config.UseConfig {
 		if err := app.loadConfigFile(); err != nil {

@@ -17,7 +17,7 @@ import (
 func Example() {
 	driver := mock.New()
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Register migrations
 	q.MustAdd(queen.M{
@@ -47,7 +47,7 @@ func Example() {
 func Example_goFunctionMigration() {
 	driver := mock.New()
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// SQL migration to create table
 	q.MustAdd(queen.M{
@@ -67,7 +67,7 @@ func Example_goFunctionMigration() {
 			if err != nil {
 				return err
 			}
-			defer rows.Close()
+			defer func() { _ = rows.Close() }()
 
 			for rows.Next() {
 				var id int
@@ -90,20 +90,20 @@ func Example_goFunctionMigration() {
 		},
 	})
 
-	q.Up(context.Background())
+	_ = q.Up(context.Background())
 }
 
 // Example_modularMigrations demonstrates organizing migrations by domain.
 func Example_modularMigrations() {
 	driver := mock.New()
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Register migrations from different modules
 	registerUserMigrations(q)
 	registerPostMigrations(q)
 
-	q.Up(context.Background())
+	_ = q.Up(context.Background())
 }
 
 func registerUserMigrations(q *queen.Queen) {
@@ -152,7 +152,7 @@ func Example_testing() {
 func Example_status() {
 	driver := mock.New()
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	q.MustAdd(queen.M{
 		Version: "001",
@@ -186,16 +186,16 @@ func Example_configuration() {
 	}
 
 	q := queen.NewWithConfig(driver, config)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
-	q.Up(context.Background())
+	_ = q.Up(context.Background())
 }
 
 // ExampleQueen_Up demonstrates applying all pending migrations.
 func ExampleQueen_Up() {
 	driver := mock.New()
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	q.MustAdd(queen.M{
 		Version: "001",
@@ -216,7 +216,7 @@ func ExampleQueen_Up() {
 func ExampleQueen_UpSteps() {
 	driver := mock.New()
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	q.MustAdd(queen.M{Version: "001", Name: "migration_1", UpSQL: "..."})
 	q.MustAdd(queen.M{Version: "002", Name: "migration_2", UpSQL: "..."})
@@ -236,7 +236,7 @@ func ExampleQueen_UpSteps() {
 func ExampleQueen_Down() {
 	driver := mock.New()
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	ctx := context.Background()
 
@@ -252,7 +252,7 @@ func ExampleQueen_Down() {
 func ExampleQueen_Reset() {
 	driver := mock.New()
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	ctx := context.Background()
 	if err := q.Reset(ctx); err != nil {
@@ -266,7 +266,7 @@ func ExampleQueen_Reset() {
 func ExampleQueen_Validate() {
 	driver := mock.New()
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	q.MustAdd(queen.M{
 		Version: "001",

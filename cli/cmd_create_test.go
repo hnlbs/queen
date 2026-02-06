@@ -43,7 +43,7 @@ func testFindNextVersion(t *testing.T, setupFiles []string, expectedVersion stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() { _ = os.Chdir(oldWd) }()
 
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func testFindNextVersion(t *testing.T, setupFiles []string, expectedVersion stri
 		if err := os.MkdirAll("migrations", 0755); err != nil {
 			t.Fatal(err)
 		}
-		defer os.RemoveAll("migrations")
+		defer func() { _ = os.RemoveAll("migrations") }()
 
 		for _, f := range setupFiles {
 			if err := os.WriteFile(filepath.Join("migrations", f), []byte("package migrations"), 0644); err != nil {

@@ -4,6 +4,7 @@ package clickhouse
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -20,36 +21,11 @@ type Driver struct {
 }
 
 // New creates a new ClickHouse driver.
-//
-// The database connection should already be open and configured.
-// The default migrations table name is "queen_migrations".
-//
-// Example:
-//
-//	db, err := sql.Open("clickhouse", DSN)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	driver, err := clickhouse.New(db)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
 func New(db *sql.DB) (*Driver, error) {
 	return NewWithTableName(db, "queen_migrations")
 }
 
 // NewWithTableName creates a new ClickHouse driver with a custom table name.
-//
-// Use this when you need to manage multiple independent sets of migrations
-// in the same database, or when you want to customize the table name
-// for organizational purposes.
-//
-// Example:
-//
-//	driver, err := clickhouse.NewWithTableName(db, "my_custom_migrations")
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
 func NewWithTableName(db *sql.DB, tableName string) (*Driver, error) {
 	ownerID, err := base.GenerateOwnerID()
 	if err != nil {
@@ -73,31 +49,20 @@ func NewWithTableName(db *sql.DB, tableName string) (*Driver, error) {
 }
 
 // Init creates the migrations tracking table and lock table if they don't exist.
-//
-// The migrations table schema:
-//   - version:     String		- unique migration version
-//   - name:        LowCardinality(String) - human-readable migration name
-//   - applied_at:  DateTime64(3)     DEFAULT now64(3) - when the migration was applied
-//   - checksum:    String            DEFAULT ” - hash of migration content for validation
-//
-// The lock table schema:
-//   - lock_key:    LowCardinality(String) - lock identifier
-//   - acquired_at: DateTime64(3)     - when the lock was acquired
-//   - expires_at:  DateTime64(3)     - when the lock expires
-//   - TTL: expires_at + 10 SECOND    - automatically removes expired locks
-//
-// The TTL (Time To Live) on the lock table provides automatic cleanup of expired
-// locks as a safety mechanism. This prevents abandoned locks from blocking migrations
-// indefinitely if a process crashes without releasing the lock.
-//
-// This method is idempotent and safe to call multiple times.
 func (d *Driver) Init(ctx context.Context) error {
 	migrationsQuery := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
-			version     String,
-			name        LowCardinality(String),
-			applied_at  DateTime64(3)     DEFAULT now64(3),
-			checksum    String            DEFAULT ''
+			version      String,
+			name         LowCardinality(String),
+			applied_at   DateTime64(3)     DEFAULT now64(3),
+			checksum     String            DEFAULT '',
+			applied_by   String            DEFAULT '',
+			duration_ms  Int64             DEFAULT 0,
+			hostname     String            DEFAULT '',
+			environment  LowCardinality(String) DEFAULT '',
+			action       LowCardinality(String) DEFAULT 'apply',
+			status       LowCardinality(String) DEFAULT 'success',
+			error_message String           DEFAULT ''
 		)
 		ENGINE = ReplacingMergeTree()
 		ORDER BY version
@@ -105,6 +70,20 @@ func (d *Driver) Init(ctx context.Context) error {
 
 	if _, err := d.DB.ExecContext(ctx, migrationsQuery); err != nil {
 		return err
+	}
+
+	migrations := []string{
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS applied_by String DEFAULT ''`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS duration_ms Int64 DEFAULT 0`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS hostname String DEFAULT ''`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS environment LowCardinality(String) DEFAULT ''`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS action LowCardinality(String) DEFAULT 'apply'`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS status LowCardinality(String) DEFAULT 'success'`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS error_message String DEFAULT ''`, d.Config.QuoteIdentifier(d.TableName)),
+	}
+
+	for _, migration := range migrations {
+		_, _ = d.DB.ExecContext(ctx, migration)
 	}
 
 	lockQuery := fmt.Sprintf(`
@@ -124,25 +103,6 @@ func (d *Driver) Init(ctx context.Context) error {
 }
 
 // Lock acquires a distributed lock to prevent concurrent migrations.
-//
-// ClickHouse doesn't have advisory locks like PostgreSQL. Instead, this driver uses
-// a lock table with expiration times to implement distributed locking across multiple
-// processes/containers.
-//
-// The lock mechanism:
-// 1. Cleans up expired locks using ALTER TABLE DELETE (async in ClickHouse)
-// 2. Checks if an active lock exists using SELECT with FINAL
-// 3. If no lock exists, attempts INSERT
-// 4. Retries with exponential backoff until timeout or lock is acquired
-//
-// IMPORTANT: Uses FINAL modifier with ReplacingMergeTree to ensure we see
-// deduplicated data, not intermediate merge states. This is critical because
-// ClickHouse operations are asynchronous by nature.
-//
-// Exponential backoff starts at 50ms and doubles up to 1s maximum to reduce
-// database load during lock contention.
-//
-// If the lock cannot be acquired within the timeout, returns queen.ErrLockTimeout.
 func (d *Driver) Lock(ctx context.Context, timeout time.Duration) error {
 	cfg := base.TableLockConfig{
 		CleanupQuery: fmt.Sprintf(
@@ -167,40 +127,24 @@ func (d *Driver) Lock(ctx context.Context, timeout time.Duration) error {
 	}
 
 	err := base.AcquireTableLock(ctx, d.DB, cfg, d.lockKey, d.ownerID, timeout)
-	if err == queen.ErrLockTimeout {
+	if errors.Is(err, queen.ErrLockTimeout) {
 		return fmt.Errorf("%w: failed to acquire lock '%s' for table '%s'",
 			queen.ErrLockTimeout, d.lockKey, d.lockTableName)
 	}
 	return err
-
 }
 
 // Unlock releases the migration lock.
-//
-// This removes the lock record from the lock table, allowing other processes
-// to acquire the lock.
-//
-// The unlock operation checks the owner_id to ensure only the process that
-// acquired the lock can release it. This prevents race conditions where an
-// expired lock is released by the wrong process.
-//
-// This method is graceful: it returns nil if the lock doesn't exist, was
-// already released, or belongs to another process. This prevents errors
-// during cleanup when locks expire via TTL or in error recovery scenarios.
 func (d *Driver) Unlock(ctx context.Context) error {
 	unlockQuery := fmt.Sprintf(
 		"ALTER TABLE %s DELETE WHERE lock_key = ? AND owner_id = ?",
 		d.Config.QuoteIdentifier(d.lockTableName),
 	)
 
-	// Execute DELETE - it's safe even if lock doesn't exist or belongs to another process
-	// We intentionally don't check if the lock exists first to avoid race conditions
 	_, err := d.DB.ExecContext(ctx, unlockQuery, d.lockKey, d.ownerID)
 	if err != nil {
 		return fmt.Errorf("failed to release lock '%s' for table '%s': %w",
 			d.lockKey, d.TableName, err)
 	}
-	// Gracefully ignore "no rows" scenarios - the lock might have expired via TTL,
-	// been released by another cleanup process, or belong to another process
 	return err
 }

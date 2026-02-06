@@ -14,7 +14,7 @@ func testLoadConfigFile(t *testing.T, name, configYAML, env string, wantErr bool
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() { _ = os.Chdir(oldWd) }()
 
 	testDir := filepath.Join(tempDir, name)
 	if err := os.MkdirAll(testDir, 0755); err != nil {
@@ -93,15 +93,15 @@ func TestLoadEnv(t *testing.T) {
 	oldDSN := os.Getenv("QUEEN_DSN")
 	oldTable := os.Getenv("QUEEN_TABLE")
 	defer func() {
-		os.Setenv("QUEEN_DRIVER", oldDriver)
-		os.Setenv("QUEEN_DSN", oldDSN)
-		os.Setenv("QUEEN_TABLE", oldTable)
+		_ = os.Setenv("QUEEN_DRIVER", oldDriver)
+		_ = os.Setenv("QUEEN_DSN", oldDSN)
+		_ = os.Setenv("QUEEN_TABLE", oldTable)
 	}()
 
 	t.Run("loads from environment", func(t *testing.T) {
-		os.Setenv("QUEEN_DRIVER", "postgres")
-		os.Setenv("QUEEN_DSN", "postgres://localhost/test")
-		os.Setenv("QUEEN_TABLE", "custom_table")
+		_ = os.Setenv("QUEEN_DRIVER", "postgres")
+		_ = os.Setenv("QUEEN_DSN", "postgres://localhost/test")
+		_ = os.Setenv("QUEEN_TABLE", "custom_table")
 
 		app := &App{
 			config: &Config{
@@ -123,8 +123,8 @@ func TestLoadEnv(t *testing.T) {
 	})
 
 	t.Run("flags override env", func(t *testing.T) {
-		os.Setenv("QUEEN_DRIVER", "postgres")
-		os.Setenv("QUEEN_DSN", "postgres://localhost/test")
+		_ = os.Setenv("QUEEN_DRIVER", "postgres")
+		_ = os.Setenv("QUEEN_DSN", "postgres://localhost/test")
 
 		app := &App{
 			config: &Config{
@@ -253,7 +253,7 @@ development:
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() { _ = os.Chdir(oldWd) }()
 
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatal(err)

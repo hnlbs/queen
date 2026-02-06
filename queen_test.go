@@ -10,9 +10,11 @@ import (
 // testDriver is a minimal driver implementation for testing.
 type testDriver struct{}
 
-func (d *testDriver) Init(ctx context.Context) error                        { return nil }
-func (d *testDriver) GetApplied(ctx context.Context) ([]Applied, error)     { return nil, nil }
-func (d *testDriver) Record(ctx context.Context, m *Migration) error        { return nil }
+func (d *testDriver) Init(ctx context.Context) error                    { return nil }
+func (d *testDriver) GetApplied(ctx context.Context) ([]Applied, error) { return nil, nil }
+func (d *testDriver) Record(ctx context.Context, m *Migration, meta *MigrationMetadata) error {
+	return nil
+}
 func (d *testDriver) Remove(ctx context.Context, version string) error      { return nil }
 func (d *testDriver) Lock(ctx context.Context, timeout time.Duration) error { return nil }
 func (d *testDriver) Unlock(ctx context.Context) error                      { return nil }

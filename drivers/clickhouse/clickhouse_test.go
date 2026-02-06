@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -130,7 +131,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Skip("ClickHouse not available:", err)
 	}
 
@@ -141,7 +142,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 		_, _ = db.Exec("DROP TABLE IF EXISTS queen_migrations_lock")
 		_, _ = db.Exec("DROP TABLE IF EXISTS test_users")
 		_, _ = db.Exec("DROP TABLE IF EXISTS test_posts")
-		db.Close()
+		_ = db.Close()
 	}
 
 	return db, cleanup
@@ -213,7 +214,7 @@ func TestRecordAndGetApplied(t *testing.T) {
 			id UUID DEFAULT generateUUIDv4()
 		) ENGINE = MergeTree() ORDER BY id`,
 	}
-	if err := driver.Record(ctx, m1); err != nil {
+	if err := driver.Record(ctx, m1, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -240,7 +241,7 @@ func TestRecordAndGetApplied(t *testing.T) {
 			id UUID DEFAULT generateUUIDv4()
 		) ENGINE = MergeTree() ORDER BY id`,
 	}
-	if err := driver.Record(ctx, m2); err != nil {
+	if err := driver.Record(ctx, m2, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -283,7 +284,7 @@ func TestRemove(t *testing.T) {
 			id UUID DEFAULT generateUUIDv4()
 		) ENGINE = MergeTree() ORDER BY id`,
 	}
-	if err := driver.Record(ctx, m); err != nil {
+	if err := driver.Record(ctx, m, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -330,7 +331,7 @@ func TestLocking(t *testing.T) {
 
 	// Try to acquire the same lock from the same driver instance (should fail)
 	err = driver.Lock(ctx, 100*time.Millisecond)
-	if err != queen.ErrLockTimeout {
+	if !errors.Is(err, queen.ErrLockTimeout) {
 		t.Errorf("expected ErrLockTimeout, got %v", err)
 	}
 
@@ -346,7 +347,7 @@ func TestLocking(t *testing.T) {
 	}
 
 	// Clean up
-	driver.Unlock(ctx)
+	_ = driver.Unlock(ctx)
 }
 
 func TestExec(t *testing.T) {
@@ -410,7 +411,7 @@ func TestFullMigrationCycle(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	ctx := context.Background()
 
@@ -508,7 +509,7 @@ func TestTimestampParsing(t *testing.T) {
 			id UUID DEFAULT generateUUIDv4()
 		) ENGINE = MergeTree() ORDER BY id`,
 	}
-	if err := driver.Record(ctx, m); err != nil {
+	if err := driver.Record(ctx, m, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -669,17 +670,17 @@ func TestLock_ContextCancellation(t *testing.T) {
 	if err := driver.Lock(context.Background(), 5*time.Second); err != nil {
 		t.Fatalf("Lock() failed: %v", err)
 	}
-	defer driver.Unlock(context.Background())
+	defer func() { _ = driver.Unlock(context.Background()) }()
 
-	// Try to acquire lock with cancelled context
+	// Try to acquire lock with canceled context
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
 	err = driver.Lock(ctx, 5*time.Second)
 	if err == nil {
-		t.Error("expected error with cancelled context, got nil")
+		t.Error("expected error with canceled context, got nil")
 	}
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled, got %v", err)
 	}
 }

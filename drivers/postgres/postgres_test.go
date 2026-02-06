@@ -19,7 +19,7 @@ import (
 // TestQuoteIdentifier tests the identifier quoting function.
 func TestQuoteIdentifier(t *testing.T) {
 	t.Parallel()
-	
+
 	tests := []struct {
 		name     string
 		input    string
@@ -70,7 +70,7 @@ func TestDriverCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a mock database connection", err)
 	}
-	db.Close()
+	_ = db.Close()
 
 	t.Run("New creates driver with default table name", func(t *testing.T) {
 		t.Parallel()
@@ -102,7 +102,7 @@ func TestInvalidMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a mock database connection", err)
 	}
-	db.Close()
+	_ = db.Close()
 
 	driver := New(db)
 	q := queen.New(driver)
@@ -248,7 +248,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	t.Helper()
 
 	// Connect to PostgreSQL (using port 5432 to avoid conflicts)
-	dsn :=  os.Getenv("POSTGRESQL_TEST_DSN")
+	dsn := os.Getenv("POSTGRESQL_TEST_DSN")
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -260,7 +260,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Skip("PostgreSQL not available:", err)
 	}
 
@@ -342,7 +342,7 @@ func TestRecordAndGetApplied(t *testing.T) {
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		)`,
 	}
-	if err := driver.Record(ctx, m1); err != nil {
+	if err := driver.Record(ctx, m1, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -369,7 +369,7 @@ func TestRecordAndGetApplied(t *testing.T) {
 			id UUID DEFAULT gen_random_uuid(),
 		)`,
 	}
-	if err := driver.Record(ctx, m2); err != nil {
+	if err := driver.Record(ctx, m2, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -409,7 +409,7 @@ func TestIntegrationRemove(t *testing.T) {
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		)`,
 	}
-	if err := driver.Record(ctx, m); err != nil {
+	if err := driver.Record(ctx, m, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -456,12 +456,12 @@ func TestIntegrationLocking(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open second connection: %v", err)
 	}
-	defer db2.Close()
+	defer func() { _ = db2.Close() }()
 
 	driver2 := New(db2)
 	err = driver2.Lock(ctx, 1*time.Second)
 
-	if errors.Is(queen.ErrLockTimeout, err) {
+	if !errors.Is(err, queen.ErrLockTimeout) {
 		t.Errorf("expected ErrLockTimeout, got %v", err)
 	}
 
@@ -477,7 +477,7 @@ func TestIntegrationLocking(t *testing.T) {
 	}
 
 	// Clean up
-	driver2.Unlock(ctx)
+	_ = driver2.Unlock(ctx)
 }
 
 func TestIntegrationExec(t *testing.T) {
@@ -627,7 +627,7 @@ func TestTimestampParsing(t *testing.T) {
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		)`,
 	}
-	if err := driver.Record(ctx, m); err != nil {
+	if err := driver.Record(ctx, m, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -685,17 +685,17 @@ func TestLock_ContextCancellation(t *testing.T) {
 	if err := driver.Lock(context.Background(), 5*time.Second); err != nil {
 		t.Fatalf("Lock() failed: %v", err)
 	}
-	defer driver.Unlock(context.Background())
+	defer func() { _ = driver.Unlock(context.Background()) }()
 
-	// Try to acquire lock with cancelled context
+	// Try to acquire lock with canceled context
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
 	err := driver.Lock(ctx, 5*time.Second)
 	if err == nil {
-		t.Error("expected error with cancelled context, got nil")
+		t.Error("expected error with canceled context, got nil")
 	}
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled, got %v", err)
 	}
 }

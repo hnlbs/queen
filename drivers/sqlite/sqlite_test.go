@@ -100,20 +100,20 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("failed to ping SQLite: %v", err)
 	}
 
 	// Enable foreign keys for tests
 	_, err = db.Exec("PRAGMA foreign_keys = ON")
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("failed to enable foreign keys: %v", err)
 	}
 
 	// Cleanup function
 	cleanup := func() {
-		db.Close()
+		_ = db.Close()
 	}
 
 	return db, cleanup
@@ -128,29 +128,29 @@ func setupTestDBFile(t *testing.T) (*sql.DB, func()) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	tmpfile.Close()
+	_ = tmpfile.Close()
 
 	// Open database with WAL mode for better concurrency testing
 	db, err := sql.Open("sqlite3", tmpfile.Name()+"?_journal_mode=WAL&_foreign_keys=on")
 	if err != nil {
-		os.Remove(tmpfile.Name())
+		_ = os.Remove(tmpfile.Name())
 		t.Fatalf("failed to open SQLite: %v", err)
 	}
 
 	// Verify connection
 	if err := db.Ping(); err != nil {
-		db.Close()
-		os.Remove(tmpfile.Name())
+		_ = db.Close()
+		_ = os.Remove(tmpfile.Name())
 		t.Fatalf("failed to ping SQLite: %v", err)
 	}
 
 	// Cleanup function
 	cleanup := func() {
-		db.Close()
-		os.Remove(tmpfile.Name())
+		_ = db.Close()
+		_ = os.Remove(tmpfile.Name())
 		// Also remove WAL and SHM files if they exist
-		os.Remove(tmpfile.Name() + "-wal")
-		os.Remove(tmpfile.Name() + "-shm")
+		_ = os.Remove(tmpfile.Name() + "-wal")
+		_ = os.Remove(tmpfile.Name() + "-shm")
 	}
 
 	return db, cleanup
@@ -214,7 +214,7 @@ func TestRecordAndGetApplied(t *testing.T) {
 		Name:    "create_users",
 		UpSQL:   "CREATE TABLE users (id INTEGER)",
 	}
-	if err := driver.Record(ctx, m1); err != nil {
+	if err := driver.Record(ctx, m1, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -239,7 +239,7 @@ func TestRecordAndGetApplied(t *testing.T) {
 		Name:    "create_posts",
 		UpSQL:   "CREATE TABLE posts (id INTEGER)",
 	}
-	if err := driver.Record(ctx, m2); err != nil {
+	if err := driver.Record(ctx, m2, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -277,7 +277,7 @@ func TestRemove(t *testing.T) {
 		Name:    "create_users",
 		UpSQL:   "CREATE TABLE users (id INTEGER)",
 	}
-	if err := driver.Record(ctx, m); err != nil {
+	if err := driver.Record(ctx, m, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -413,7 +413,7 @@ func TestFullMigrationCycle(t *testing.T) {
 
 	driver := New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	ctx := context.Background()
 
@@ -496,17 +496,17 @@ func TestWALMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	tmpfile.Close()
-	defer os.Remove(tmpfile.Name())
-	defer os.Remove(tmpfile.Name() + "-wal")
-	defer os.Remove(tmpfile.Name() + "-shm")
+	_ = tmpfile.Close()
+	defer func() { _ = os.Remove(tmpfile.Name()) }()
+	defer func() { _ = os.Remove(tmpfile.Name() + "-wal") }()
+	defer func() { _ = os.Remove(tmpfile.Name() + "-shm") }()
 
 	// Open with WAL mode
 	db, err := sql.Open("sqlite3", tmpfile.Name()+"?_journal_mode=WAL")
 	if err != nil {
 		t.Fatalf("failed to open SQLite: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Verify WAL mode is enabled
 	var journalMode string
@@ -521,7 +521,7 @@ func TestWALMode(t *testing.T) {
 	// Test that migrations work in WAL mode
 	driver := New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	ctx := context.Background()
 
@@ -561,7 +561,7 @@ func TestTimestampParsing(t *testing.T) {
 		Name:    "test_migration",
 		UpSQL:   "CREATE TABLE test (id INTEGER)",
 	}
-	if err := driver.Record(ctx, m); err != nil {
+	if err := driver.Record(ctx, m, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 

@@ -19,14 +19,14 @@ func Example() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create MS SQL Server driver
 	driver := mssql.New(db)
 
 	// Create Queen instance
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Register migrations
 	q.MustAdd(queen.M{
@@ -62,12 +62,12 @@ func Example() {
 // Example_customTableName demonstrates using a custom table name for migrations.
 func Example_customTableName() {
 	db, _ := sql.Open("sqlserver", "sqlserver://user:password@localhost:1433?database=myapp")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Use custom table name
 	driver := mssql.NewWithTableName(db, "my_custom_migrations")
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// The migrations will be tracked in "my_custom_migrations" table
 	// instead of the default "queen_migrations"
@@ -76,11 +76,11 @@ func Example_customTableName() {
 // Example_goFunctionMigration demonstrates using Go functions for complex migrations.
 func Example_goFunctionMigration() {
 	db, _ := sql.Open("sqlserver", "sqlserver://user:password@localhost:1433?database=myapp")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := mssql.New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Migration using Go function for complex logic
 	q.MustAdd(queen.M{
@@ -93,7 +93,7 @@ func Example_goFunctionMigration() {
 			if err != nil {
 				return err
 			}
-			defer rows.Close()
+			defer func() { _ = rows.Close() }()
 
 			// Normalize each email
 			for rows.Next() {
@@ -132,7 +132,7 @@ func Example_goFunctionMigration() {
 // Example_withConfig demonstrates using custom configuration.
 func Example_withConfig() {
 	db, _ := sql.Open("sqlserver", "sqlserver://user:password@localhost:1433?database=myapp")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := mssql.New(db)
 
@@ -142,7 +142,7 @@ func Example_withConfig() {
 		LockTimeout: 10 * 60, // 10 minutes in seconds
 	}
 	q := queen.NewWithConfig(driver, config)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Your migrations here
 }
@@ -150,11 +150,11 @@ func Example_withConfig() {
 // Example_foreignKeys demonstrates handling foreign keys properly.
 func Example_foreignKeys() {
 	db, _ := sql.Open("sqlserver", "sqlserver://user:password@localhost:1433?database=myapp")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := mssql.New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// First migration: create parent table
 	q.MustAdd(queen.M{
@@ -207,7 +207,7 @@ func Example_status() {
 		fmt.Println("SQL Server not available")
 		return
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Check if SQL Server is actually available
 	if err := db.Ping(); err != nil {
@@ -217,7 +217,7 @@ func Example_status() {
 
 	driver := mssql.New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Register migrations
 	q.MustAdd(queen.M{
