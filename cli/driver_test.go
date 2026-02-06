@@ -77,7 +77,6 @@ func TestCreateDriver(t *testing.T) {
 					t.Errorf("unexpected error for driver %q: %v", tt.driver, err)
 				}
 			}
-
 		})
 	}
 }

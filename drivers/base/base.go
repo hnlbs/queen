@@ -1,20 +1,4 @@
 // Package base provides common functionality for Queen database drivers.
-//
-// This package contains shared code to reduce duplication across different
-// database drivers (PostgreSQL, MySQL, SQLite, ClickHouse, CockroachDB).
-//
-// The base package provides:
-//   - Transaction management (Exec)
-//   - Connection lifecycle (Close)
-//   - Common migration operations (GetApplied, Record, Remove)
-//   - SQL identifier quoting strategies
-//   - Placeholder formatting strategies
-//
-// Note:
-// The base driver does not manage dedicated database connections for locking.
-// Some databases (e.g. MySQL with GET_LOCK) require a dedicated connection
-// for locking. In such cases, the concrete driver (e.g., mysql.Driver) is
-// responsible for managing its own *sql.Conn for the lifetime of the lock.
 package base
 
 import (
@@ -27,36 +11,14 @@ import (
 )
 
 // Config contains configuration for the base driver.
-// Each concrete driver provides these strategies to customize behavior.
 type Config struct {
-	// Placeholder generates SQL placeholders for the n-th argument (1-based).
-	// PostgreSQL/CockroachDB: func(n int) string { return fmt.Sprintf("$%d", n) }
-	// MySQL/SQLite/ClickHouse: func(n int) string { return "?" }
-	Placeholder func(n int) string
-
-	// QuoteIdentifier escapes SQL identifiers (table names, column names).
-	// PostgreSQL/SQLite/ClickHouse/CockroachDB: double quotes
-	// MySQL: backticks
+	Placeholder     func(n int) string
 	QuoteIdentifier func(name string) string
-
-	// ParseTime parses time from query result (optional).
-	// Most drivers: nil (use standard scanning)
-	// SQLite: parses from ISO8601 string
-	ParseTime func(src interface{}) (time.Time, error)
+	ParseTime       func(src interface{}) (time.Time, error)
 }
 
 // Driver provides a base implementation of common queen.Driver methods.
-//
-// Concrete drivers should embed this type and implement:
-//   - Init()       - database-specific schema creation
-//   - Lock()/Unlock() - database-specific locking mechanisms if needed
-//
-// Note:
-// The base driver works with a standard *sql.DB connection pool and does not
-// manage dedicated connections. Some databases (e.g., MySQL with GET_LOCK)
-// require a dedicated connection for certain operations. In those cases, the
-// concrete driver (e.g., mysql.Driver) should manage its own *sql.Conn
-// for the lifetime of such operations.
+// Concrete drivers should embed this type and implement Init() and Lock()/Unlock().
 type Driver struct {
 	DB        *sql.DB
 	TableName string
@@ -64,19 +26,6 @@ type Driver struct {
 }
 
 // Exec executes a function within a transaction with the specified isolation level.
-//
-// If the function returns an error, the transaction is rolled back.
-// Otherwise, the transaction is committed.
-//
-// The isolationLevel parameter controls transaction isolation:
-//   - sql.LevelDefault: use database default
-//   - sql.LevelReadUncommitted: allow dirty reads
-//   - sql.LevelReadCommitted: prevent dirty reads
-//   - sql.LevelRepeatableRead: prevent non-repeatable reads
-//   - sql.LevelSerializable: full isolation
-//
-// This provides ACID guarantees for migration execution.
-// Identical implementation for all database drivers.
 func (d *Driver) Exec(ctx context.Context, isolationLevel sql.IsolationLevel, fn func(*sql.Tx) error) error {
 	txOpts := &sql.TxOptions{
 		Isolation: isolationLevel,
@@ -88,7 +37,6 @@ func (d *Driver) Exec(ctx context.Context, isolationLevel sql.IsolationLevel, fn
 	}
 
 	if err := fn(tx); err != nil {
-		// Ignore rollback error, return original error
 		_ = tx.Rollback()
 		return err
 	}
@@ -97,19 +45,16 @@ func (d *Driver) Exec(ctx context.Context, isolationLevel sql.IsolationLevel, fn
 }
 
 // Close closes the database connection.
-//
-// Identical implementation for all database drivers.
 func (d *Driver) Close() error {
 	return d.DB.Close()
 }
 
-// GetApplied returns all applied migrations sorted by applied_at in ascending order.
-//
-// Uses the QuoteIdentifier strategy for SQL identifier escaping.
-// Uses the optional ParseTime strategy for SQLite compatibility.
+// GetApplied returns all applied migrations sorted by applied_at.
 func (d *Driver) GetApplied(ctx context.Context) ([]queen.Applied, error) {
 	query := fmt.Sprintf(`
-		SELECT version, name, applied_at, checksum
+		SELECT version, name, applied_at, checksum,
+		       applied_by, duration_ms, hostname, environment,
+		       action, status, error_message
 		FROM %s
 		ORDER BY applied_at ASC
 	`, d.Config.QuoteIdentifier(d.TableName))
@@ -123,11 +68,16 @@ func (d *Driver) GetApplied(ctx context.Context) ([]queen.Applied, error) {
 	var applied []queen.Applied
 	for rows.Next() {
 		var a queen.Applied
+		var appliedBy, hostname, environment, action, status, errorMessage sql.NullString
+		var durationMS sql.NullInt64
 
-		// If custom time parser is provided (for SQLite)
 		if d.Config.ParseTime != nil {
 			var appliedAtStr string
-			if err := rows.Scan(&a.Version, &a.Name, &appliedAtStr, &a.Checksum); err != nil {
+			if err := rows.Scan(
+				&a.Version, &a.Name, &appliedAtStr, &a.Checksum,
+				&appliedBy, &durationMS, &hostname, &environment,
+				&action, &status, &errorMessage,
+			); err != nil {
 				return nil, err
 			}
 			parsedTime, err := d.Config.ParseTime(appliedAtStr)
@@ -136,10 +86,35 @@ func (d *Driver) GetApplied(ctx context.Context) ([]queen.Applied, error) {
 			}
 			a.AppliedAt = parsedTime
 		} else {
-			// Standard scanning for other databases
-			if err := rows.Scan(&a.Version, &a.Name, &a.AppliedAt, &a.Checksum); err != nil {
+			if err := rows.Scan(
+				&a.Version, &a.Name, &a.AppliedAt, &a.Checksum,
+				&appliedBy, &durationMS, &hostname, &environment,
+				&action, &status, &errorMessage,
+			); err != nil {
 				return nil, err
 			}
+		}
+
+		if appliedBy.Valid {
+			a.AppliedBy = appliedBy.String
+		}
+		if durationMS.Valid {
+			a.DurationMS = durationMS.Int64
+		}
+		if hostname.Valid {
+			a.Hostname = hostname.String
+		}
+		if environment.Valid {
+			a.Environment = environment.String
+		}
+		if action.Valid {
+			a.Action = action.String
+		}
+		if status.Valid {
+			a.Status = status.String
+		}
+		if errorMessage.Valid {
+			a.ErrorMessage = errorMessage.String
 		}
 
 		applied = append(applied, a)
@@ -149,28 +124,60 @@ func (d *Driver) GetApplied(ctx context.Context) ([]queen.Applied, error) {
 }
 
 // Record marks a migration as applied in the database.
-//
-// Uses Placeholder and QuoteIdentifier strategies to generate
-// database-specific SQL queries.
-func (d *Driver) Record(ctx context.Context, m *queen.Migration) error {
+func (d *Driver) Record(ctx context.Context, m *queen.Migration, meta *queen.MigrationMetadata) error {
 	query := fmt.Sprintf(`
-		INSERT INTO %s (version, name, checksum)
-		VALUES (%s, %s, %s)
+		INSERT INTO %s (version, name, checksum, applied_by, duration_ms, hostname, environment, action, status, error_message)
+		VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 	`,
 		d.Config.QuoteIdentifier(d.TableName),
 		d.Config.Placeholder(1),
 		d.Config.Placeholder(2),
 		d.Config.Placeholder(3),
+		d.Config.Placeholder(4),
+		d.Config.Placeholder(5),
+		d.Config.Placeholder(6),
+		d.Config.Placeholder(7),
+		d.Config.Placeholder(8),
+		d.Config.Placeholder(9),
+		d.Config.Placeholder(10),
 	)
 
-	_, err := d.DB.ExecContext(ctx, query, m.Version, m.Name, m.Checksum())
+	var appliedBy, hostname, environment, action, status, errorMessage sql.NullString
+	var durationMS sql.NullInt64
+
+	if meta != nil {
+		if meta.AppliedBy != "" {
+			appliedBy = sql.NullString{String: meta.AppliedBy, Valid: true}
+		}
+		if meta.DurationMS > 0 {
+			durationMS = sql.NullInt64{Int64: meta.DurationMS, Valid: true}
+		}
+		if meta.Hostname != "" {
+			hostname = sql.NullString{String: meta.Hostname, Valid: true}
+		}
+		if meta.Environment != "" {
+			environment = sql.NullString{String: meta.Environment, Valid: true}
+		}
+		if meta.Action != "" {
+			action = sql.NullString{String: meta.Action, Valid: true}
+		}
+		if meta.Status != "" {
+			status = sql.NullString{String: meta.Status, Valid: true}
+		}
+		if meta.ErrorMessage != "" {
+			errorMessage = sql.NullString{String: meta.ErrorMessage, Valid: true}
+		}
+	}
+
+	_, err := d.DB.ExecContext(ctx, query,
+		m.Version, m.Name, m.Checksum(),
+		appliedBy, durationMS, hostname, environment,
+		action, status, errorMessage,
+	)
 	return err
 }
 
-// Remove removes a migration record from the database (for rollback).
-//
-// Uses Placeholder and QuoteIdentifier strategies to generate
-// database-specific SQL queries.
+// Remove removes a migration record from the database.
 func (d *Driver) Remove(ctx context.Context, version string) error {
 	query := fmt.Sprintf(`
 		DELETE FROM %s WHERE version = %s
@@ -183,26 +190,17 @@ func (d *Driver) Remove(ctx context.Context, version string) error {
 	return err
 }
 
-// --- Placeholder Strategies ---
-
 // PlaceholderDollar creates placeholders in the format $1, $2, $3...
-// Used by PostgreSQL and CockroachDB.
 func PlaceholderDollar(n int) string {
 	return fmt.Sprintf("$%d", n)
 }
 
 // PlaceholderQuestion creates placeholders in the format ?, ?, ?...
-// Used by MySQL, SQLite, and ClickHouse.
 func PlaceholderQuestion(n int) string {
 	return "?"
 }
 
-// --- Time Parsing Strategies ---
-
 // ParseTimeISO8601 parses time from ISO8601 string format.
-// Used by SQLite which stores timestamps as TEXT.
-//
-// SQLite default format: "YYYY-MM-DD HH:MM:SS"
 func ParseTimeISO8601(src interface{}) (time.Time, error) {
 	str, ok := src.(string)
 	if !ok {

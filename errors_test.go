@@ -10,8 +10,8 @@ func TestMigrationError(t *testing.T) {
 		cause := errors.New("table already exists")
 		err := newMigrationError("001", "create_users", "up", "postgres", cause)
 
-		migErr, ok := err.(*MigrationError)
-		if !ok {
+		var migErr *MigrationError
+		if !errors.As(err, &migErr) {
 			t.Fatal("expected *MigrationError")
 		}
 
@@ -42,7 +42,10 @@ func TestMigrationError(t *testing.T) {
 		cause := errors.New("no down migration defined")
 		err := newMigrationError("002", "add_column", "down", "", cause)
 
-		migErr := err.(*MigrationError)
+		var migErr *MigrationError
+		if !errors.As(err, &migErr) {
+			t.Fatal("expected *MigrationError")
+		}
 		expected := "migration 002 (add_column) failed during down: no down migration defined"
 		if migErr.Error() != expected {
 			t.Errorf("Error() = %q, want %q", migErr.Error(), expected)
@@ -53,7 +56,10 @@ func TestMigrationError(t *testing.T) {
 		cause := errors.New("something went wrong")
 		err := newMigrationError("003", "test_migration", "", "", cause)
 
-		migErr := err.(*MigrationError)
+		var migErr *MigrationError
+		if !errors.As(err, &migErr) {
+			t.Fatal("expected *MigrationError")
+		}
 		expected := "migration 003 (test_migration): something went wrong"
 		if migErr.Error() != expected {
 			t.Errorf("Error() = %q, want %q", migErr.Error(), expected)
@@ -65,7 +71,7 @@ func TestMigrationError(t *testing.T) {
 		err := newMigrationError("001", "test", "up", "mysql", cause)
 
 		unwrapped := errors.Unwrap(err)
-		if unwrapped != cause {
+		if !errors.Is(unwrapped, cause) {
 			t.Errorf("Unwrap() = %v, want %v", unwrapped, cause)
 		}
 	})

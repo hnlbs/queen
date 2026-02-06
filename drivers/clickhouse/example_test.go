@@ -21,7 +21,7 @@ func Example() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create ClickHouse driver
 	driver, err := clickhouse.New(db)
@@ -31,7 +31,7 @@ func Example() {
 
 	// Create Queen instance
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Register migrations
 	q.MustAdd(queen.M{
@@ -72,7 +72,7 @@ func Example_customTableName() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Use custom table name
 	driver, err := clickhouse.NewWithTableName(db, "my_custom_migrations")
@@ -80,7 +80,7 @@ func Example_customTableName() {
 		log.Fatal(err)
 	}
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// The migrations will be tracked in "my_custom_migrations" table
 	// instead of the default "queen_migrations"
@@ -92,14 +92,14 @@ func Example_goFunctionMigration() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver, err := clickhouse.New(db)
 	if err != nil {
 		log.Fatal(err)
 	}
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	q.MustAdd(queen.M{
 		Version: "003",
@@ -155,7 +155,7 @@ func Example_goFunctionMigration() {
 			if err != nil {
 				return err
 			}
-			defer rows.Close()
+			defer func() { _ = rows.Close() }()
 
 			// Normalize each email
 			for rows.Next() {
@@ -197,7 +197,7 @@ func Example_withConfig() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver, err := clickhouse.New(db)
 	if err != nil {
@@ -210,7 +210,7 @@ func Example_withConfig() {
 		LockTimeout: 10 * time.Minute, // 10 minutes
 	}
 	q := queen.NewWithConfig(driver, config)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Your migrations here
 }
@@ -225,7 +225,7 @@ func Example_status() {
 		fmt.Println("ClickHouse not available")
 		return
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Check if ClickHouse is actually available
 	if err := db.Ping(); err != nil {
@@ -238,7 +238,7 @@ func Example_status() {
 		log.Fatal(err)
 	}
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Register migrations
 	q.MustAdd(queen.M{

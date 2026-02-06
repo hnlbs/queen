@@ -11,14 +11,6 @@ func (app *App) resetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "reset",
 		Short: "Rollback all migrations",
-		Long: `Rollback all applied migrations.
-
-⚠️  WARNING: This is a destructive operation that will rollback ALL
-migrations, potentially dropping tables and losing data.
-
-Examples:
-  # Rollback all migrations
-  migrate reset`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
@@ -29,7 +21,7 @@ Examples:
 
 			if !app.config.Yes {
 				if !confirm("⚠️  This will rollback ALL migrations. Are you absolutely sure?") {
-					return fmt.Errorf("operation cancelled")
+					return fmt.Errorf("operation canceled")
 				}
 			}
 

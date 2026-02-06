@@ -15,21 +15,6 @@ func (app *App) statusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show migration status",
-		Long: `Show the status of all registered migrations.
-
-This command displays which migrations have been applied, which are pending,
-and whether any applied migrations have been modified.
-
-Output format:
-  - Table format (default): human-readable table
-  - JSON format (--json): machine-readable JSON output
-
-Examples:
-  # Show status in table format
-  migrate status
-
-  # Show status in JSON format
-  migrate status --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
@@ -52,11 +37,23 @@ Examples:
 	}
 }
 
+func countStatuses(statuses []queen.MigrationStatus) (applied, pending, modified int) {
+	for _, s := range statuses {
+		switch s.Status {
+		case queen.StatusApplied:
+			applied++
+		case queen.StatusPending:
+			pending++
+		case queen.StatusModified:
+			modified++
+		}
+	}
+	return
+}
+
 func (app *App) outputStatusTable(statuses []queen.MigrationStatus) error {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.Header([]string{"Version", "Name", "Status", "Applied At", "Checksum", "Rollback"})
-
-	var applied, pending, modified int
 
 	for _, s := range statuses {
 		rollback := "no"
@@ -69,16 +66,6 @@ func (app *App) outputStatusTable(statuses []queen.MigrationStatus) error {
 			appliedAt = s.AppliedAt.Format("2006-01-02 15:04:05")
 		}
 
-		status := s.Status.String()
-		switch s.Status {
-		case queen.StatusApplied:
-			applied++
-		case queen.StatusPending:
-			pending++
-		case queen.StatusModified:
-			modified++
-		}
-
 		checksum := s.Checksum
 		if len(checksum) > 12 {
 			checksum = checksum[:12] + "..."
@@ -87,7 +74,7 @@ func (app *App) outputStatusTable(statuses []queen.MigrationStatus) error {
 		if err := table.Append([]string{
 			s.Version,
 			s.Name,
-			status,
+			s.Status.String(),
 			appliedAt,
 			checksum,
 			rollback,
@@ -100,27 +87,17 @@ func (app *App) outputStatusTable(statuses []queen.MigrationStatus) error {
 		return err
 	}
 
+	applied, pending, modified := countStatuses(statuses)
 	fmt.Printf("\nSummary: %d total, %d applied, %d pending", len(statuses), applied, pending)
 	if modified > 0 {
 		fmt.Printf(", %d modified (⚠️  WARNING)", modified)
 	}
 	fmt.Println()
 	return nil
-
 }
 
 func (app *App) outputStatusJSON(statuses []queen.MigrationStatus) error {
-	var applied, pending, modified int
-	for _, s := range statuses {
-		switch s.Status {
-		case queen.StatusApplied:
-			applied++
-		case queen.StatusPending:
-			pending++
-		case queen.StatusModified:
-			modified++
-		}
-	}
+	applied, pending, modified := countStatuses(statuses)
 
 	output := struct {
 		Migrations []queen.MigrationStatus `json:"migrations"`

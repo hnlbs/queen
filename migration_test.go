@@ -271,7 +271,7 @@ func TestMigrationExecuteUp(t *testing.T) {
 			},
 		}
 
-		m.executeUp(context.Background(), nil)
+		_ = m.executeUp(context.Background(), nil)
 
 		if !called {
 			t.Error("UpFunc was not called")

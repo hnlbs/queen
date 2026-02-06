@@ -5,7 +5,6 @@ import (
 	"fmt"
 )
 
-// Common errors returned by Queen operations.
 var (
 	ErrNoMigrations         = errors.New("no migrations registered")
 	ErrVersionConflict      = errors.New("version conflict")
@@ -20,16 +19,12 @@ var (
 )
 
 // MigrationError wraps an error with migration context.
-//
-// This structured error provides rich context for debugging migration failures,
-// including which migration failed, what operation was being performed, and
-// which database driver was in use.
 type MigrationError struct {
-	Version   string // Migration version (e.g., "001", "002")
-	Name      string // Migration name (e.g., "create_users")
-	Operation string // Operation being performed: "up", "down", "validate"
-	Driver    string // Database driver name (e.g., "postgres", "mysql", "sqlite")
-	Cause     error  // The underlying error that occurred
+	Version   string
+	Name      string
+	Operation string
+	Driver    string
+	Cause     error
 }
 
 func (e *MigrationError) Error() string {
@@ -48,7 +43,6 @@ func (e *MigrationError) Unwrap() error {
 	return e.Cause
 }
 
-// newMigrationError creates a new MigrationError with full context.
 func newMigrationError(version, name, operation, driver string, err error) error {
 	return &MigrationError{
 		Version:   version,

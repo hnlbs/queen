@@ -11,7 +11,7 @@ import (
 // TestMockDriver_SQLMigrations tests that SQL migrations work with the mock driver.
 func TestMockDriver_SQLMigrations(t *testing.T) {
 	driver := New()
-	defer driver.Close()
+	defer func() { _ = driver.Close() }()
 
 	q := queen.New(driver)
 
@@ -56,7 +56,7 @@ func TestMockDriver_SQLMigrations(t *testing.T) {
 // TestMockDriver_MixedMigrations tests mixing SQL and Go function migrations.
 func TestMockDriver_MixedMigrations(t *testing.T) {
 	driver := New()
-	defer driver.Close()
+	defer func() { _ = driver.Close() }()
 
 	q := queen.New(driver)
 

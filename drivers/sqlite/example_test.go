@@ -6,6 +6,7 @@ package sqlite_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 
@@ -22,14 +23,14 @@ func Example() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create SQLite driver
 	driver := sqlite.New(db)
 
 	// Create Queen instance
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Register migrations
 	q.MustAdd(queen.M{
@@ -66,11 +67,11 @@ func Example() {
 func Example_inMemory() {
 	// Use in-memory database (perfect for testing)
 	db, _ := sql.Open("sqlite3", ":memory:")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := sqlite.New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Migrations work exactly the same with in-memory databases
 	q.MustAdd(queen.M{
@@ -92,11 +93,11 @@ func Example_inMemory() {
 func Example_walMode() {
 	// Enable WAL mode for better concurrent read/write performance
 	db, _ := sql.Open("sqlite3", "myapp.db?_journal_mode=WAL")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := sqlite.New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Your migrations here
 }
@@ -106,11 +107,11 @@ func Example_fullConnectionString() {
 	// Recommended connection string for production
 	dsn := "myapp.db?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_synchronous=NORMAL"
 	db, _ := sql.Open("sqlite3", dsn)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := sqlite.New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// This configuration provides:
 	// - WAL mode: better concurrency
@@ -122,12 +123,12 @@ func Example_fullConnectionString() {
 // Example_customTableName demonstrates using a custom table name for migrations.
 func Example_customTableName() {
 	db, _ := sql.Open("sqlite3", "myapp.db")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Use custom table name
 	driver := sqlite.NewWithTableName(db, "my_custom_migrations")
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// The migrations will be tracked in "my_custom_migrations" table
 	// instead of the default "queen_migrations"
@@ -136,11 +137,11 @@ func Example_customTableName() {
 // Example_goFunctionMigration demonstrates using Go functions for complex migrations.
 func Example_goFunctionMigration() {
 	db, _ := sql.Open("sqlite3", "myapp.db")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := sqlite.New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Migration using Go function for complex logic
 	q.MustAdd(queen.M{
@@ -153,7 +154,7 @@ func Example_goFunctionMigration() {
 			if err != nil {
 				return err
 			}
-			defer rows.Close()
+			defer func() { _ = rows.Close() }()
 
 			// Normalize each email
 			for rows.Next() {
@@ -193,11 +194,11 @@ func Example_goFunctionMigration() {
 func Example_foreignKeys() {
 	// Enable foreign keys in connection string
 	db, _ := sql.Open("sqlite3", "myapp.db?_foreign_keys=on")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := sqlite.New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// First migration: create parent table
 	q.MustAdd(queen.M{
@@ -242,11 +243,11 @@ func Example_foreignKeys() {
 // Example_indexes demonstrates creating indexes for better query performance.
 func Example_indexes() {
 	db, _ := sql.Open("sqlite3", "myapp.db")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := sqlite.New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Create table
 	q.MustAdd(queen.M{
@@ -286,11 +287,11 @@ func Example_indexes() {
 // Example_status demonstrates checking migration status.
 func Example_status() {
 	db, _ := sql.Open("sqlite3", ":memory:")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := sqlite.New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Register migrations
 	q.MustAdd(queen.M{
@@ -332,7 +333,7 @@ func Example_status() {
 // Example_withConfig demonstrates using custom configuration.
 func Example_withConfig() {
 	db, _ := sql.Open("sqlite3", "myapp.db")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := sqlite.New(db)
 
@@ -342,7 +343,7 @@ func Example_withConfig() {
 		LockTimeout: 5 * 60, // 5 minutes in seconds
 	}
 	q := queen.NewWithConfig(driver, config)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Your migrations here
 }
@@ -354,12 +355,12 @@ func Example_testing() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver := sqlite.New(db)
 	// Note: In actual tests, use queen.NewTest(t, driver)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	// Register migrations
 	q.MustAdd(queen.M{
@@ -391,7 +392,7 @@ func Example_testing() {
 
 	// Verify table is gone
 	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").Scan(&tableName)
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		log.Fatal("table should be gone")
 	}
 	fmt.Println("Table dropped successfully")

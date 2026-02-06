@@ -309,13 +309,15 @@ func TestQueen_Add_WithNamingValidation(t *testing.T) {
 // mockDriver for testing
 type mockDriver struct{}
 
-func (d *mockDriver) Init(ctx context.Context) error                         { return nil }
-func (d *mockDriver) Close() error                                           { return nil }
-func (d *mockDriver) Lock(ctx context.Context, timeout time.Duration) error  { return nil }
-func (d *mockDriver) Unlock(ctx context.Context) error                       { return nil }
-func (d *mockDriver) GetApplied(ctx context.Context) ([]Applied, error)      { return nil, nil }
-func (d *mockDriver) Record(ctx context.Context, migration *Migration) error { return nil }
-func (d *mockDriver) Remove(ctx context.Context, version string) error       { return nil }
+func (d *mockDriver) Init(ctx context.Context) error                        { return nil }
+func (d *mockDriver) Close() error                                          { return nil }
+func (d *mockDriver) Lock(ctx context.Context, timeout time.Duration) error { return nil }
+func (d *mockDriver) Unlock(ctx context.Context) error                      { return nil }
+func (d *mockDriver) GetApplied(ctx context.Context) ([]Applied, error)     { return nil, nil }
+func (d *mockDriver) Record(ctx context.Context, migration *Migration, meta *MigrationMetadata) error {
+	return nil
+}
+func (d *mockDriver) Remove(ctx context.Context, version string) error { return nil }
 func (d *mockDriver) Exec(ctx context.Context, isolationLevel sql.IsolationLevel, fn func(*sql.Tx) error) error {
 	return nil
 }

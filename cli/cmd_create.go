@@ -15,50 +15,25 @@ func (app *App) createCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Create a new migration",
-		Long: `Create a new migration file with a template.
-
-This command generates a new migration file in the migrations/ directory
-with a sequential version number and the specified name.
-
-Migration types:
-  - sql (default): SQL migration with UpSQL and DownSQL
-  - go: Go function migration with UpFunc and DownFunc
-
-The command will:
-  1. Scan migrations/ directory to find the next version number
-  2. Create a new file: migrations/<version>_<name>.go
-  3. Print instructions for adding to register.go
-
-Examples:
-  # Create SQL migration
-  migrate create add_users_table
-
-  # Create Go function migration
-  migrate create migrate_user_data --type go`,
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 
-			// Validate name
 			if !queen.IsValidMigrationName(name) {
 				return fmt.Errorf("invalid migration name: must contain only lowercase letters, numbers, and underscores")
 			}
 
-			// Load config file to get naming pattern
-			if err := app.loadConfigFile(); err != nil {
-				// If config doesn't exist, use default pattern
-				if !os.IsNotExist(err) && err.Error() != "config file not found: .queen.yaml (use --use-config only when config file exists)" {
+			if err := app.loadConfigFile(); err != nil && !os.IsNotExist(err) {
+				if err.Error() != "config file not found: .queen.yaml (use --use-config only when config file exists)" {
 					return fmt.Errorf("failed to load config: %w", err)
 				}
 			}
 
-			// Determine next version
 			nextVersion, err := app.findNextVersion()
 			if err != nil {
 				return err
 			}
 
-			// Generate file
 			filename := fmt.Sprintf("migrations/%s_%s.go", nextVersion, name)
 			variableName := migrationVariableName(nextVersion, name)
 
@@ -72,17 +47,14 @@ Examples:
 				return fmt.Errorf("invalid migration type: %s (must be 'sql' or 'go')", migrationType)
 			}
 
-			// Create migrations directory if it doesn't exist
 			if err := os.MkdirAll("migrations", 0755); err != nil {
 				return fmt.Errorf("failed to create migrations directory: %w", err)
 			}
 
-			// Write file
 			if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
 				return fmt.Errorf("failed to create migration file: %w", err)
 			}
 
-			// Success message
 			fmt.Printf("✓ Created migration file: %s\n\n", filename)
 			fmt.Println("Next steps:")
 			fmt.Printf("1. Edit %s and add your migration logic\n", filename)
@@ -98,13 +70,9 @@ Examples:
 	return cmd
 }
 
-// findNextVersion scans the migrations directory and returns the next version number
-// based on the naming pattern from config.
 func (app *App) findNextVersion() (string, error) {
-	// Get naming config
 	namingConfig := app.getNamingConfig()
 
-	// If no naming config, use default sequential-padded with padding 3
 	if namingConfig == nil {
 		namingConfig = &queen.NamingConfig{
 			Pattern: queen.NamingPatternSequentialPadded,
@@ -113,13 +81,11 @@ func (app *App) findNextVersion() (string, error) {
 		}
 	}
 
-	// Scan existing migrations
 	existingVersions, err := app.getExistingVersions()
 	if err != nil {
 		return "", err
 	}
 
-	// If no existing migrations, return first version
 	if len(existingVersions) == 0 {
 		switch namingConfig.Pattern {
 		case queen.NamingPatternSequential:
@@ -137,11 +103,9 @@ func (app *App) findNextVersion() (string, error) {
 		}
 	}
 
-	// Use naming config to find next version
 	return namingConfig.FindNextVersion(existingVersions)
 }
 
-// getExistingVersions scans the migrations directory and returns all existing version strings.
 func (app *App) getExistingVersions() ([]string, error) {
 	entries, err := os.ReadDir("migrations")
 	if err != nil {
@@ -151,14 +115,13 @@ func (app *App) getExistingVersions() ([]string, error) {
 		return nil, fmt.Errorf("failed to read migrations directory: %w", err)
 	}
 
-	var versions []string
+	versions := make([]string, 0, len(entries))
 
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
 
-		// Parse version from filename (e.g., "001_create_users.go")
 		name := entry.Name()
 		if !strings.HasSuffix(name, ".go") {
 			continue
@@ -175,21 +138,10 @@ func (app *App) getExistingVersions() ([]string, error) {
 	return versions, nil
 }
 
-// migrationVariableName generates a Go variable name from version and name.
-// Example: "001", "create_users" -> "Migration001CreateUsers"
 func migrationVariableName(version, name string) string {
-	// Convert snake_case to PascalCase
-	parts := strings.Split(name, "_")
-	for i, part := range parts {
-		if len(part) > 0 {
-			parts[i] = strings.ToUpper(part[:1]) + part[1:]
-		}
-	}
-
-	return fmt.Sprintf("Migration%s%s", version, strings.Join(parts, ""))
+	return fmt.Sprintf("Migration%s%s", version, toPascalCase(name))
 }
 
-// generateSQLTemplate generates a SQL migration template.
 func generateSQLTemplate(version, name, variableName string) string {
 	description := strings.ReplaceAll(name, "_", " ")
 
@@ -213,7 +165,6 @@ var %s = queen.M{
 `, variableName, description, variableName, version, name)
 }
 
-// generateGoTemplate generates a Go function migration template.
 func generateGoTemplate(version, name, variableName string) string {
 	description := strings.ReplaceAll(name, "_", " ")
 	upFuncName := fmt.Sprintf("up%s%s", version, toPascalCase(name))
@@ -266,7 +217,6 @@ func %s(ctx context.Context, tx *sql.Tx) error {
 `, variableName, description, variableName, version, name, upFuncName, downFuncName, upFuncName, downFuncName)
 }
 
-// toPascalCase converts snake_case to PascalCase.
 func toPascalCase(s string) string {
 	parts := strings.Split(s, "_")
 	for i, part := range parts {

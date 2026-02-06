@@ -2,481 +2,269 @@
 
 Command-line interface for managing database migrations with Queen.
 
-## Overview
-
-Queen CLI is an embedded library - you create your own binary that imports your migrations. This approach:
-
-- Provides direct access to Go function migrations
-- Follows the "migrations are code, not files" philosophy
-- Works like goose v3 for Go migrations
-
 ## Quick Start
 
-### 1. Create your migration binary
-
-```go
-// cmd/migrate/main.go
-package main
-
-import (
-    _ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
-
-    "github.com/honeynil/queen/cli"
-    "myapp/migrations"
-)
-
-func main() {
-    cli.Run(migrations.Register)
-}
-```
-
-### 2. Create migrations
-
-```go
-// migrations/register.go
-package migrations
-
-import "github.com/honeynil/queen"
-
-func Register(q *queen.Queen) {
-    q.MustAdd(Migration001CreateUsers)
-    q.MustAdd(Migration002AddEmail)
-}
-```
-
-```go
-// migrations/001_create_users.go
-package migrations
-
-import "github.com/honeynil/queen"
-
-var Migration001CreateUsers = queen.M{
-    Version: "001",
-    Name:    "create_users",
-    UpSQL: `
-        CREATE TABLE users (
-            id SERIAL PRIMARY KEY,
-            email VARCHAR(255) NOT NULL UNIQUE
-        )
-    `,
-    DownSQL: `DROP TABLE users`,
-}
-```
-
-### 3. Build and run
-
 ```bash
-go build -o migrate cmd/migrate/main.go
+# Initialize project
+queen init --driver postgres
 
-# Using environment variables
-export QUEEN_DRIVER=postgres
-export QUEEN_DSN="postgres://localhost/myapp?sslmode=disable"
+# Create migration
+queen create add_users
 
-./migrate up
-./migrate status
-```
+# Apply migrations
+queen up
 
-## Commands
-
-### create
-
-Create a new migration file.
-
-```bash
-migrate create <name> [--type sql|go]
-```
-
-**Options:**
-- `--type sql` (default): SQL migration with UpSQL/DownSQL
-- `--type go`: Go function migration with UpFunc/DownFunc
-
-**Examples:**
-```bash
-migrate create add_users_table              # SQL migration
-migrate create migrate_user_data --type go  # Go function migration
-```
-
-After creating, add the migration to `migrations/register.go`:
-```go
-q.MustAdd(Migration003AddUsersTable)
-```
-
-### up
-
-Apply pending migrations.
-
-```bash
-migrate up [--steps N]
-```
-
-**Options:**
-- `--steps N`: Apply only N migrations (default: all pending)
-
-**Examples:**
-```bash
-migrate up           # Apply all pending
-migrate up --steps 3 # Apply next 3 migrations
-```
-
-### down
-
-Rollback migrations.
-
-```bash
-migrate down [--steps N]
-```
-
-**Options:**
-- `--steps N`: Rollback N migrations (default: 1)
-
-**Examples:**
-```bash
-migrate down           # Rollback last migration
-migrate down --steps 3 # Rollback last 3 migrations
-```
-
-### reset
-
-Rollback all applied migrations.
-
-```bash
-migrate reset
-```
-
-### plan
-
-Show migration execution plan (dry-run mode).
-
-```bash
-migrate plan [--direction up|down] [--limit N] [--json]
-```
-
-**Options:**
-- `--direction`: Migration direction - `up` (default) or `down`
-- `--limit N`: Show only N migrations (default: all)
-- `--json`: Output in JSON format for CI/CD integration
-
-**Examples:**
-```bash
-migrate plan                    # Show pending migrations
-migrate plan --direction down   # Show what would be rolled back
-migrate plan --limit 3          # Show next 3 pending migrations
-migrate plan --json             # JSON output for CI/CD
-```
-
-**Table output:**
-```
-Migration Plan (UP)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-→ 002  add_email      sql      pending
-→ 003  migrate_data   go-func  pending  ⚠️  No rollback defined
-
-2 migration(s) will be applied
-⚠️  1 migration(s) with warnings
-```
-
-**JSON output:**
-```json
-{
-  "direction": "up",
-  "plans": [
-    {
-      "version": "002",
-      "name": "add_email",
-      "direction": "up",
-      "status": "pending",
-      "type": "sql",
-      "sql": "ALTER TABLE users ADD COLUMN email VARCHAR(255)",
-      "has_rollback": true,
-      "is_destructive": false,
-      "checksum": "abc123...",
-      "warnings": []
-    }
-  ],
-  "summary": {
-    "total": 2,
-    "with_rollback": 1,
-    "with_warnings": 1
-  }
-}
-```
-
-### explain
-
-Explain a specific migration.
-
-```bash
-migrate explain <version> [--json]
-```
-
-**Options:**
-- `--json`: Output in JSON format
-
-**Examples:**
-```bash
-migrate explain 001       # Explain migration 001
-migrate explain 001 --json # JSON output
-```
-
-**Output:**
-```
-Migration: 001
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Name:          create_users
-Status:        applied
-Type:          sql
-Direction:     up
-Has Rollback:  true
-Checksum:      a1b2c3d4...
-
-UP SQL:
-------------------------------------------------------------
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  email VARCHAR(255) NOT NULL UNIQUE
-)
-------------------------------------------------------------
-```
-
-### status
-
-Show migration status.
-
-```bash
-migrate status [--json]
-```
-
-**Options:**
-- `--json`: Output in JSON format for CI/CD integration
-
-**Table output:**
-
-| Version | Name         | Status  | Applied At          | Checksum    | Rollback |
-|---------|--------------|---------|---------------------|-------------|----------|
-| 001     | create_users | applied | 2026-01-16 10:30:00 | a1b2c3d4... | yes      |
-| 002     | add_email    | applied | 2026-01-16 10:30:05 | e5f6g7h8... | yes      |
-| 003     | migrate_data | pending | -                   | i9j0k1l2... | yes      |
-
-```
-Summary: 3 total, 2 applied, 1 pending
-```
-
-**JSON output:**
-```json
-{
-  "migrations": [
-    {
-      "version": "001",
-      "name": "create_users",
-      "status": "applied",
-      "applied_at": "2026-01-16T10:30:00Z",
-      "checksum": "a1b2c3d4...",
-      "has_rollback": true
-    }
-  ],
-  "summary": {
-    "total": 3,
-    "applied": 2,
-    "pending": 1,
-    "modified": 0
-  }
-}
-```
-
-### validate
-
-Validate all registered migrations.
-
-```bash
-migrate validate
-```
-
-Checks for:
-- Duplicate version identifiers
-- Invalid migration definitions
-- Checksum mismatches (modified applied migrations)
-
-### version
-
-Show current migration version.
-
-```bash
-migrate version
+# Check status
+queen status
 ```
 
 ## Configuration
 
 Configuration priority (highest to lowest):
 1. Command-line flags
-2. Environment variables
+2. Environment variables (`QUEEN_DRIVER`, `QUEEN_DSN`, etc.)
 3. Config file `.queen.yaml` (requires `--use-config`)
 
-### Command-line flags
+## Commands Reference
 
+### Core Commands
+
+Apply and rollback migrations.
+
+| Command | Description | Examples |
+|---------|-------------|----------|
+| `queen up` | Apply pending migrations | `queen up`<br>`queen up --steps 3`<br>`queen up --to 050` |
+| `queen down` | Rollback migrations | `queen down`<br>`queen down --steps 2`<br>`queen down --to 040` |
+| `queen goto` | Migrate to specific version (up or down) | `queen goto 045` |
+| `queen reset` | Rollback all migrations | `queen reset` |
+
+### Information Commands
+
+View migration status and history.
+
+| Command | Description | Examples |
+|---------|-------------|----------|
+| `queen status` | Show current migration status | `queen status`<br>`queen status --json`<br>`queen status --pending-only` |
+| `queen log` | Show migration history | `queen log --last 10`<br>`queen log --since 2026-01-01`<br>`queen log --with-duration` |
+| `queen version` | Show current database version | `queen version` |
+| `queen diff` | Compare two versions | `queen diff 001 005`<br>`queen diff current +3`<br>`queen diff --show-sql` |
+
+### Management Commands
+
+Create and manage migrations.
+
+| Command | Description | Examples |
+|---------|-------------|----------|
+| `queen create` | Create new migration | `queen create add_users`<br>`queen create migrate_data --type go`<br>`queen create --interactive` |
+| `queen squash` | Combine multiple migrations into one | `queen squash 001,002,003 --into merged`<br>`queen squash --from 001 --to 010` |
+| `queen baseline` | Create baseline migration from current schema | `queen baseline --name initial_schema`<br>`queen baseline --at 050` |
+
+### Diagnostics Commands
+
+Validate and diagnose migration health.
+
+| Command | Description | Examples |
+|---------|-------------|----------|
+| `queen doctor` | Full health check and diagnostics | `queen doctor`<br>`queen doctor --deep`<br>`queen doctor --gaps`<br>`queen doctor --fix` |
+| `queen check` | Quick validation for CI/CD | `queen check --ci`<br>`queen check --no-pending` |
+| `queen validate` | Validate migration definitions | `queen validate` |
+| `queen plan` | Show execution plan (dry-run) | `queen plan`<br>`queen plan --direction down`<br>`queen plan --json` |
+| `queen explain` | Explain specific migration | `queen explain 001`<br>`queen explain 001 --json` |
+
+### Gap Detection Commands
+
+Detect and manage migration gaps.
+
+| Command | Description | Examples |
+|---------|-------------|----------|
+| `queen gap detect` | Detect migration gaps | `queen gap detect --json` |
+| `queen gap fill` | Fill detected gaps | `queen gap fill`<br>`queen gap fill 003,004`<br>`queen gap fill --mark-applied` |
+| `queen gap analyze` | Analyze gap dependencies | `queen gap analyze` |
+| `queen gap ignore` | Ignore specific gaps | `queen gap ignore 003 --reason "manually applied"` |
+
+### Utility Commands
+
+Project initialization and tools.
+
+| Command | Description | Examples |
+|---------|-------------|----------|
+| `queen init` | Initialize Queen in project | `queen init`<br>`queen init --driver postgres`<br>`queen init --with-config`<br>`queen init --interactive` |
+| `queen import` | Import migrations from other systems | `queen import --from goose ./migrations` |
+| `queen tui` | Launch interactive Terminal UI mode | `queen tui` |
+
+## Global Flags
+
+Available for all commands:
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--driver` | Database driver (postgres, mysql, sqlite, clickhouse) | - |
+| `--dsn` | Database connection string | - |
+| `--table` | Migration table name | `queen_migrations` |
+| `--timeout` | Lock timeout (e.g. 30m, 1h) | - |
+| `--use-config` | Enable config file (.queen.yaml) | `false` |
+| `--env` | Environment from config file | - |
+| `--unlock-production` | Unlock production environment | `false` |
+| `--yes` | Skip confirmation prompts (for CI/CD) | `false` |
+| `--json` | Output in JSON format | `false` |
+| `--verbose` | Verbose output | `false` |
+
+## Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `QUEEN_DRIVER` | Database driver | `postgres` |
+| `QUEEN_DSN` | Database connection string | `postgres://localhost/myapp` |
+| `QUEEN_TABLE` | Migration table name | `queen_migrations` |
+| `QUEEN_LOCK_TIMEOUT` | Lock timeout | `30m` |
+
+## TUI Mode (Terminal UI)
+
+Queen includes an interactive Terminal UI for managing migrations visually.
+
+### Launching TUI
 ```bash
-migrate --driver postgres --dsn "postgres://localhost/myapp" up
+queen tui
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--driver` | Database driver: postgres, mysql, sqlite, clickhouse |
-| `--dsn` | Database connection string |
-| `--table` | Migration table name (default: queen_migrations) |
-| `--timeout` | Lock timeout (e.g. 30m, 1h) |
-| `--use-config` | Enable config file |
-| `--env` | Environment from config file |
-| `--unlock-production` | Unlock production environment |
-| `--yes` | Skip confirmation prompts (for CI/CD) |
-| `--json` | JSON output for status command |
-| `--verbose` | Verbose output |
+### Features
+- **Migrations View**: Visual list of all migrations with status (pending/applied)
+- **Gaps View**: Automatic gap detection with detailed diagnostics
+- **Interactive Navigation**: Navigate with arrow keys, apply/rollback with enter
+- **Real-time Updates**: Live status updates after operations
+- **Gap Management**: Fill gaps or add them to .queenignore interactively
 
-### Environment variables
+### Keyboard Shortcuts
 
+**Navigation:**
+- `↑/k` - Move cursor up
+- `↓/j` - Move cursor down
+- `g` - Jump to top
+- `G` - Jump to bottom
+
+**Views:**
+- `1` - Migrations view
+- `2` - Gaps detection view
+- `3/?` - Help view
+
+**Actions (Migrations View):**
+- `enter` - Apply pending migration / Rollback applied migration
+- `u` - Apply migration up to cursor
+- `d` - Rollback migration from cursor
+
+**Actions (Gaps View):**
+- `enter/f` - Fill the selected gap
+- `i` - Ignore the selected gap (add to .queenignore)
+
+**General:**
+- `r` - Refresh data
+- `q/Ctrl+C` - Quit
+
+### Example TUI Workflow
+1. Launch TUI: `queen tui`
+2. Press `2` to view gaps
+3. Navigate to a gap and press `f` to fill it
+4. Press `1` to return to migrations view
+5. Navigate to a migration and press `enter` to apply it
+6. Press `r` to refresh status
+
+## Common Workflows
+
+### Development Workflow
 ```bash
-export QUEEN_DRIVER=postgres
-export QUEEN_DSN="postgres://localhost/myapp?sslmode=disable"
-export QUEEN_TABLE=queen_migrations
-export QUEEN_LOCK_TIMEOUT=30m
+# Create and apply migration
+queen create add_feature
+queen up
+
+# Check what happened
+queen status
+queen log --last 5
 ```
 
-### Config file (.queen.yaml)
-
-```yaml
-# Safety lock - prevents accidental use
-config_locked: false
-
-development:
-  driver: postgres
-  dsn: postgres://localhost/myapp_dev?sslmode=disable
-  table: queen_migrations
-  lock_timeout: 30m
-
-staging:
-  driver: postgres
-  dsn: postgres://staging.example.com/myapp?sslmode=require
-  require_confirmation: true
-
-production:
-  driver: postgres
-  dsn: postgres://prod.example.com/myapp?sslmode=require
-  require_confirmation: true
-  require_explicit_unlock: true
-```
-
-**Usage:**
+### Rollback Workflow
 ```bash
-# Development
-migrate --use-config --env development up
+# Rollback last migration
+queen down
 
-# Production (requires --unlock-production)
-migrate --use-config --env production --unlock-production up
+# Rollback to specific version
+queen down --to 040
+
+# Or use goto
+queen goto 040
 ```
 
-## Safety Features
-
-### Config locking
-
-Set `config_locked: true` in `.queen.yaml` to prevent accidental usage:
-
-```yaml
-config_locked: true
-```
-
-This requires explicit flags or environment variables instead of config file.
-
-### Confirmation prompts
-
-Environments with `require_confirmation: true` will prompt before destructive operations:
-
-```
-⚠️  WARNING: You are about to apply migrations on STAGING environment
-Database: postgres://staging.example.com/myapp
-Continue? (yes/no):
-```
-
-### Production unlock
-
-Environments with `require_explicit_unlock: true` require `--unlock-production` flag:
-
+### CI/CD Workflow
 ```bash
-# This will fail
-migrate --use-config --env production up
+# Validate migrations
+queen check --ci
 
-# This works
-migrate --use-config --env production --unlock-production up
+# Apply with auto-confirm
+queen up --yes
+
+# Verify
+queen status --json
 ```
 
-Production also requires typing "production" to confirm:
-
-```
-⚠️  DANGER: You are about to apply migrations on PRODUCTION environment
-Type 'production' to confirm:
-```
-
-### CI/CD mode
-
-Use `--yes` to skip all confirmations:
-
+### Gap Detection Workflow
 ```bash
-migrate --driver postgres --dsn "$DATABASE_URL" --yes up
+# Detect gaps
+queen gap detect
+
+# Analyze impact
+queen gap analyze
+
+# Fill gaps
+queen gap fill --apply
 ```
 
-## Custom DB Connection
+### Diagnostics Workflow
+```bash
+# Full health check
+queen doctor
 
-For custom connection setup (connection pooling, etc.):
+# Check for gaps
+queen doctor --gaps
 
-```go
-package main
+# Deep schema validation
+queen doctor --deep
 
-import (
-    "database/sql"
-
-    _ "github.com/jackc/pgx/v5/stdlib"
-
-    "github.com/honeynil/queen/cli"
-    "myapp/migrations"
-)
-
-func main() {
-    cli.RunWithDB(migrations.Register, func(dsn string) (*sql.DB, error) {
-        db, err := sql.Open("pgx", dsn)
-        if err != nil {
-            return nil, err
-        }
-
-        // Custom settings
-        db.SetMaxOpenConns(10)
-        db.SetMaxIdleConns(5)
-
-        return db, nil
-    })
-}
+# Auto-fix issues
+queen doctor --fix
 ```
 
 ## Supported Databases
 
-| Database | Driver name | Connection string example |
-|----------|-------------|---------------------------|
+| Database | Driver | Connection String Example |
+|----------|--------|---------------------------|
 | PostgreSQL | `postgres` | `postgres://user:pass@localhost/db?sslmode=disable` |
 | MySQL | `mysql` | `user:pass@tcp(localhost:3306)/db?parseTime=true` |
 | SQLite | `sqlite` | `./app.db?_journal_mode=WAL` |
 | ClickHouse | `clickhouse` | `tcp://localhost:9000/db` |
+| MSSQL | `mssql` | `sqlserver://user:pass@localhost:1433?database=db` |
 
-## Project Structure
+## Exit Codes
 
-Recommended project layout:
+| Code | Description |
+|------|-------------|
+| 0 | Success |
+| 1 | General error |
+| 2 | Configuration error |
+| 3 | Migration failed |
+| 4 | Gap detected (with --ci flag) |
+| 5 | Validation failed |
 
+## Getting Help
+
+```bash
+# General help
+queen --help
+
+# Command-specific help
+queen up --help
+queen doctor --help
+
+# Version information
+queen version
 ```
-myapp/
-├── cmd/
-│   └── migrate/
-│       └── main.go         # CLI entry point
-├── migrations/
-│   ├── register.go         # Migration registration
-│   ├── 001_create_users.go
-│   ├── 002_add_email.go
-│   └── 003_migrate_data.go
-├── .queen.yaml             # Optional config
-└── go.mod
-```
+
+For detailed documentation and examples, visit: https://github.com/honeynil/queen

@@ -35,9 +35,9 @@ type ConfigFile struct {
 
 // NamingConfig represents naming pattern configuration in YAML.
 type NamingConfig struct {
-	Pattern string `yaml:"pattern"` // sequential, sequential-padded, semver
-	Padding int    `yaml:"padding"` // for sequential-padded
-	Enforce *bool  `yaml:"enforce"` // pointer to distinguish between unset and false
+	Pattern string `yaml:"pattern"`
+	Padding int    `yaml:"padding"`
+	Enforce *bool  `yaml:"enforce"`
 }
 
 // Environment represents a single environment configuration.
@@ -127,7 +127,6 @@ func (app *App) getEnvironmentName() string {
 	return "custom"
 }
 
-// getNamingConfig converts CLI NamingConfig to queen.NamingConfig.
 func (nc *NamingConfig) toQueenNamingConfig() *queen.NamingConfig {
 	if nc == nil {
 		return nil
@@ -136,7 +135,7 @@ func (nc *NamingConfig) toQueenNamingConfig() *queen.NamingConfig {
 	config := &queen.NamingConfig{
 		Pattern: queen.NamingPattern(nc.Pattern),
 		Padding: nc.Padding,
-		Enforce: true, // default
+		Enforce: true,
 	}
 
 	if nc.Enforce != nil {
@@ -146,7 +145,6 @@ func (nc *NamingConfig) toQueenNamingConfig() *queen.NamingConfig {
 	return config
 }
 
-// getNamingConfig returns the naming configuration from the config file.
 func (app *App) getNamingConfig() *queen.NamingConfig {
 	if app.config.configFile == nil || app.config.configFile.Naming == nil {
 		return nil

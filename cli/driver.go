@@ -11,10 +11,6 @@ import (
 	"github.com/honeynil/queen/drivers/sqlite"
 )
 
-// Driver name constants.
-//
-// These constants define the recognized driver names that can be used
-// in configuration. Some drivers have multiple aliases for convenience.
 const (
 	DriverPostgres   = "postgres"
 	DriverPostgreSQL = "postgresql"
@@ -23,21 +19,12 @@ const (
 	DriverSQLite3    = "sqlite3"
 	DriverClickHouse = "clickhouse"
 
-	// SQL driver names used with database/sql.
-	// These are the actual driver names registered with sql.Register().
 	SQLDriverPostgres   = "pgx"
 	SQLDriverMySQL      = "mysql"
 	SQLDriverSQLite     = "sqlite3"
 	SQLDriverClickHouse = "clickhouse"
 )
 
-// getSQLDriverName maps Queen driver names to their corresponding SQL driver names.
-//
-// This function handles driver name aliases and returns the canonical SQL driver name
-// that should be used with database/sql.Open(). For example, both "postgres" and
-// "postgresql" map to "pgx".
-//
-// If the driver name is not recognized, it returns the input unchanged as a passthrough.
 func getSQLDriverName(driverName string) string {
 	switch driverName {
 	case DriverPostgres, DriverPostgreSQL:
@@ -53,7 +40,6 @@ func getSQLDriverName(driverName string) string {
 	}
 }
 
-// createDriver creates the appropriate driver based on the driver name.
 func (app *App) createDriver(db *sql.DB) (queen.Driver, error) {
 	switch app.config.Driver {
 	case DriverPostgres, DriverPostgreSQL, "pgx":
