@@ -12,13 +12,6 @@ func (app *App) versionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Show current migration version",
-		Long: `Show the current migration version in the database.
-
-This displays the most recently applied migration version.
-
-Examples:
-  # Show current version
-  migrate version`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 

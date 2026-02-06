@@ -1,46 +1,10 @@
 // Package ydb provides a YandexDB (YDB) driver for Queen migrations.
-//
-// YDB is a distributed SQL database that combines high availability and
-// scalability with strong consistency and ACID transactions.
-//
-// # Basic Usage
-//
-//	import (
-//	    "database/sql"
-//	    _ "github.com/ydb-platform/ydb-go-sdk/v3"
-//	    "github.com/honeynil/queen"
-//	    "github.com/honeynil/queen/drivers/ydb"
-//	)
-//
-//	db, _ := sql.Open("ydb", "grpc://localhost:2136/local")
-//	driver, _ := ydb.New(db)
-//	q := queen.New(driver)
-//
-// # Connection String
-//
-// The connection string format:
-//
-//	grpc://localhost:2136/local
-//	grpcs://user:password@localhost:2135/local
-//
-// # Locking Mechanism
-//
-// YDB uses optimistic concurrency control and doesn't have advisory locks
-// like PostgreSQL. Instead, this driver uses a lock table with expiration
-// times to implement distributed locking across multiple processes/containers.
-//
-// The lock table is automatically created during initialization and uses
-// TTL (Time To Live) for automatic cleanup of expired locks.
-//
-// # Compatibility
-//
-// This driver requires YDB with YQL support and the ydb-go-sdk/v3 driver.
-// Tested with YDB 23.3+.
 package ydb
 
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -50,9 +14,6 @@ import (
 )
 
 // Driver implements the queen.Driver interface for YDB.
-//
-// YDB uses table-based locking since it doesn't support advisory locks.
-// The driver is thread-safe and can be used concurrently by multiple goroutines.
 type Driver struct {
 	base.Driver
 	lockTableName string
@@ -61,36 +22,11 @@ type Driver struct {
 }
 
 // New creates a new YDB driver.
-//
-// The database connection should already be open and configured.
-// The default migrations table name is "queen_migrations".
-//
-// Example:
-//
-//	db, err := sql.Open("ydb", "grpc://localhost:2136/local")
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	driver, err := ydb.New(db)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
 func New(db *sql.DB) (*Driver, error) {
 	return NewWithTableName(db, "queen_migrations")
 }
 
 // NewWithTableName creates a new YDB driver with a custom table name.
-//
-// Use this when you need to manage multiple independent sets of migrations
-// in the same database, or when you want to customize the table name
-// for organizational purposes.
-//
-// Example:
-//
-//	driver, err := ydb.NewWithTableName(db, "my_custom_migrations")
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
 func NewWithTableName(db *sql.DB, tableName string) (*Driver, error) {
 	ownerID, err := base.GenerateOwnerID()
 	if err != nil {
@@ -102,13 +38,9 @@ func NewWithTableName(db *sql.DB, tableName string) (*Driver, error) {
 			DB:        db,
 			TableName: tableName,
 			Config: base.Config{
-				// YDB with go_query_bind=declare,numeric uses $1, $2, $3 placeholders
-				// The driver automatically adds DECLARE statements and converts to named params
-				Placeholder: base.PlaceholderDollar,
-				// YDB uses backticks for identifiers by default (can use double quotes in ANSI mode)
+				Placeholder:     base.PlaceholderDollar,
 				QuoteIdentifier: base.QuoteBackticks,
-				// YDB supports TIMESTAMP natively
-				ParseTime: nil,
+				ParseTime:       nil,
 			},
 		},
 		lockTableName: tableName + "_lock",
@@ -118,35 +50,22 @@ func NewWithTableName(db *sql.DB, tableName string) (*Driver, error) {
 }
 
 // Init creates the migrations tracking table and lock table if they don't exist.
-//
-// The migrations table schema:
-//   - version:     Utf8 PRIMARY KEY - unique migration version
-//   - name:        Utf8 NOT NULL - human-readable migration name
-//   - applied_at:  Timestamp NOT NULL - when the migration was applied
-//   - checksum:    Utf8 NOT NULL - hash of migration content for validation
-//
-// The lock table schema:
-//   - lock_key:    Utf8 PRIMARY KEY - lock identifier
-//   - acquired_at: Timestamp - when the lock was acquired
-//   - expires_at:  Timestamp NOT NULL - when the lock expires
-//   - owner_id:    Utf8 NOT NULL - unique owner identifier
-//   - TTL: automatic cleanup of expired locks
-//
-// YDB note: YDB requires explicit PRIMARY KEY specification for all tables.
-// Timestamps are stored as Timestamp type which provides microsecond precision.
-//
-// This method is idempotent and safe to call multiple times.
 func (d *Driver) Init(ctx context.Context) error {
-	// YDB requires SchemeQueryMode for DDL operations (CREATE TABLE, etc.)
 	ctx = ydb.WithQueryMode(ctx, ydb.SchemeQueryMode)
 
-	// Create migrations table
 	migrationsQuery := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
-			version     Utf8,
-			name        Utf8,
-			applied_at  Timestamp,
-			checksum    Utf8,
+			version       Utf8,
+			name          Utf8,
+			applied_at    Timestamp,
+			checksum      Utf8,
+			applied_by    Utf8,
+			duration_ms   Int64,
+			hostname      Utf8,
+			environment   Utf8,
+			action        Utf8,
+			status        Utf8,
+			error_message Utf8,
 			PRIMARY KEY (version)
 		)
 	`, d.Config.QuoteIdentifier(d.TableName))
@@ -155,7 +74,20 @@ func (d *Driver) Init(ctx context.Context) error {
 		return fmt.Errorf("failed to create migrations table: %w", err)
 	}
 
-	// Create lock table with TTL for automatic cleanup
+	migrations := []string{
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN applied_by Utf8`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN duration_ms Int64`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN hostname Utf8`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN environment Utf8`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN action Utf8`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN status Utf8`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN error_message Utf8`, d.Config.QuoteIdentifier(d.TableName)),
+	}
+
+	for _, migration := range migrations {
+		_, _ = d.DB.ExecContext(ctx, migration)
+	}
+
 	lockQuery := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			lock_key    Utf8,
@@ -177,24 +109,6 @@ func (d *Driver) Init(ctx context.Context) error {
 }
 
 // Lock acquires a distributed lock to prevent concurrent migrations.
-//
-// YDB doesn't have advisory locks like PostgreSQL. Instead, this driver uses
-// a lock table with expiration times to implement distributed locking across
-// multiple processes/containers.
-//
-// The lock mechanism:
-// 1. Cleans up expired locks using DELETE
-// 2. Checks if an active lock exists using SELECT
-// 3. If no lock exists, attempts INSERT
-// 4. Retries with exponential backoff until timeout or lock is acquired
-//
-// YDB uses optimistic concurrency control, so INSERT conflicts are handled
-// gracefully by retrying with backoff.
-//
-// Exponential backoff starts at 50ms and doubles up to 1s maximum to reduce
-// database load during lock contention.
-//
-// If the lock cannot be acquired within the timeout, returns queen.ErrLockTimeout.
 func (d *Driver) Lock(ctx context.Context, timeout time.Duration) error {
 	cfg := base.TableLockConfig{
 		CleanupQuery: fmt.Sprintf(
@@ -220,7 +134,7 @@ func (d *Driver) Lock(ctx context.Context, timeout time.Duration) error {
 	}
 
 	err := base.AcquireTableLock(ctx, d.DB, cfg, d.lockKey, d.ownerID, timeout)
-	if err == queen.ErrLockTimeout {
+	if errors.Is(err, queen.ErrLockTimeout) {
 		return fmt.Errorf("%w: failed to acquire lock '%s' for table '%s'",
 			queen.ErrLockTimeout, d.lockKey, d.lockTableName)
 	}
@@ -228,51 +142,59 @@ func (d *Driver) Lock(ctx context.Context, timeout time.Duration) error {
 }
 
 // Unlock releases the migration lock.
-//
-// This removes the lock record from the lock table, allowing other processes
-// to acquire the lock.
-//
-// The unlock operation checks the owner_id to ensure only the process that
-// acquired the lock can release it. This prevents race conditions where an
-// expired lock is released by the wrong process.
-//
-// This method is graceful: it returns nil if the lock doesn't exist, was
-// already released, or belongs to another process. This prevents errors
-// during cleanup when locks expire via TTL or in error recovery scenarios.
 func (d *Driver) Unlock(ctx context.Context) error {
 	unlockQuery := fmt.Sprintf(
 		"DELETE FROM %s WHERE lock_key = $1 AND owner_id = $2",
 		d.Config.QuoteIdentifier(d.lockTableName),
 	)
 
-	// Execute DELETE - it's safe even if lock doesn't exist or belongs to another process
-	// We intentionally don't check if the lock exists first to avoid race conditions
 	_, err := d.DB.ExecContext(ctx, unlockQuery, d.lockKey, d.ownerID)
 	if err != nil {
 		return fmt.Errorf("failed to release lock '%s' for table '%s': %w",
 			d.lockKey, d.TableName, err)
 	}
 
-	// Gracefully ignore "no rows" scenarios - the lock may have expired via TTL,
-	// been released by another cleanup process, or belong to another process
 	return nil
 }
 
 // Record marks a migration as applied in the database.
-// YDB-specific implementation that includes applied_at timestamp.
-//
-// Unlike other drivers, YDB does not support DEFAULT values with function calls
-// (e.g., DEFAULT CurrentUtcTimestamp()). It only supports literal DEFAULT values.
-// Therefore, this method explicitly inserts the timestamp using CurrentUtcTimestamp()
-// in the SQL query instead of relying on a column DEFAULT.
-func (d *Driver) Record(ctx context.Context, m *queen.Migration) error {
+func (d *Driver) Record(ctx context.Context, m *queen.Migration, meta *queen.MigrationMetadata) error {
+	var appliedBy, hostname, environment, action, status, errorMessage interface{}
+	var durationMS interface{}
+
+	if meta != nil {
+		if meta.AppliedBy != "" {
+			appliedBy = meta.AppliedBy
+		}
+		if meta.DurationMS > 0 {
+			durationMS = meta.DurationMS
+		}
+		if meta.Hostname != "" {
+			hostname = meta.Hostname
+		}
+		if meta.Environment != "" {
+			environment = meta.Environment
+		}
+		if meta.Action != "" {
+			action = meta.Action
+		}
+		if meta.Status != "" {
+			status = meta.Status
+		}
+		if meta.ErrorMessage != "" {
+			errorMessage = meta.ErrorMessage
+		}
+	}
+
 	query := fmt.Sprintf(`
-		INSERT INTO %s (version, name, applied_at, checksum)
-		VALUES ($1, $2, CurrentUtcTimestamp(), $3)
+		INSERT INTO %s (version, name, applied_at, checksum, applied_by, duration_ms, hostname, environment, action, status, error_message)
+		VALUES ($1, $2, CurrentUtcTimestamp(), $3, $4, $5, $6, $7, $8, $9, $10)
 	`,
 		d.Config.QuoteIdentifier(d.TableName),
 	)
 
-	_, err := d.DB.ExecContext(ctx, query, m.Version, m.Name, m.Checksum())
+	_, err := d.DB.ExecContext(ctx, query,
+		m.Version, m.Name, m.Checksum(),
+		appliedBy, durationMS, hostname, environment, action, status, errorMessage)
 	return err
 }

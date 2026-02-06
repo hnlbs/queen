@@ -48,5 +48,4 @@ func normalizeWhitespace(s string) string {
 
 	// Trim leading/trailing empty lines from result
 	return strings.TrimSpace(strings.Join(result, "\n"))
-
 }

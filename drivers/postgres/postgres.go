@@ -14,13 +14,11 @@ import (
 // Driver implements the queen.Driver interface for PostgreSQL.
 type Driver struct {
 	base.Driver
-	lockID int64
+	lockID   int64
 	lockConn *sql.Conn
 }
 
 // New creates a new PostgreSQL driver.
-// The database connection should already be open and configured.
-// The default migrations table name is "queen_migrations".
 func New(db *sql.DB) *Driver {
 	return NewWithTableName(db, "queen_migrations")
 }
@@ -34,10 +32,10 @@ func NewWithTableName(db *sql.DB, tableName string) *Driver {
 			Config: base.Config{
 				Placeholder:     base.PlaceholderDollar,
 				QuoteIdentifier: base.QuoteDoubleQuotes,
-				ParseTime:       nil, // PostgreSQL supports TIMESTAMP natively
+				ParseTime:       nil,
 			},
 		},
-		lockID: hashTableName(tableName), // Unique lock ID based on table name
+		lockID: hashTableName(tableName),
 	}
 }
 
@@ -48,17 +46,41 @@ func (d *Driver) Init(ctx context.Context) error {
 			version VARCHAR(255) PRIMARY KEY,
 			name VARCHAR(255) NOT NULL,
 			applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			checksum VARCHAR(64) NOT NULL
+			checksum VARCHAR(64) NOT NULL,
+			applied_by VARCHAR(255),
+			duration_ms BIGINT,
+			hostname VARCHAR(255),
+			environment VARCHAR(50),
+			action VARCHAR(20) DEFAULT 'apply',
+			status VARCHAR(20) DEFAULT 'success',
+			error_message TEXT
 		)
 	`, d.Config.QuoteIdentifier(d.TableName))
 
-	_, err := d.DB.ExecContext(ctx, query)
-	return err
+	if _, err := d.DB.ExecContext(ctx, query); err != nil {
+		return err
+	}
+
+	migrations := []string{
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS applied_by VARCHAR(255)`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS duration_ms BIGINT`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS hostname VARCHAR(255)`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS environment VARCHAR(50)`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS action VARCHAR(20) DEFAULT 'apply'`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'success'`, d.Config.QuoteIdentifier(d.TableName)),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS error_message TEXT`, d.Config.QuoteIdentifier(d.TableName)),
+	}
+
+	for _, migration := range migrations {
+		if _, err := d.DB.ExecContext(ctx, migration); err != nil {
+			continue
+		}
+	}
+
+	return nil
 }
 
 // Lock acquires an advisory lock to prevent concurrent migrations.
-// PostgreSQL advisory locks are automatically released when the connection closes
-// or when explicitly unlocked.
 func (d *Driver) Lock(ctx context.Context, timeout time.Duration) error {
 	conn, err := d.DB.Conn(ctx)
 	if err != nil {
@@ -70,7 +92,7 @@ func (d *Driver) Lock(ctx context.Context, timeout time.Duration) error {
 
 	_, err = conn.ExecContext(lockCtx, "SELECT pg_advisory_lock($1)", d.lockID)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		if lockCtx.Err() == context.DeadlineExceeded {
 			return fmt.Errorf("%w: failed to acquire advisory lock '%d' for table '%s'",
 				queen.ErrLockTimeout, d.lockID, d.TableName)
@@ -88,7 +110,7 @@ func (d *Driver) Unlock(ctx context.Context) error {
 		return nil
 	}
 	defer func() {
-		d.lockConn.Close()
+		_ = d.lockConn.Close()
 		d.lockConn = nil
 	}()
 
@@ -101,7 +123,6 @@ func (d *Driver) Unlock(ctx context.Context) error {
 }
 
 // hashTableName creates a unique int64 hash from the table name for advisory locks.
-// This ensures different migration tables use different locks.
 func hashTableName(name string) int64 {
 	var hash int64
 	for i, c := range name {

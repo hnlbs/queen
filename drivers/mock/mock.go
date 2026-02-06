@@ -101,7 +101,7 @@ func (d *Driver) GetApplied(ctx context.Context) ([]queen.Applied, error) {
 }
 
 // Record marks a migration as applied.
-func (d *Driver) Record(ctx context.Context, m *queen.Migration) error {
+func (d *Driver) Record(ctx context.Context, m *queen.Migration, meta *queen.MigrationMetadata) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -109,12 +109,25 @@ func (d *Driver) Record(ctx context.Context, m *queen.Migration) error {
 		return d.recordErr
 	}
 
-	d.applied[m.Version] = queen.Applied{
+	applied := queen.Applied{
 		Version:   m.Version,
 		Name:      m.Name,
 		AppliedAt: time.Now(),
 		Checksum:  m.Checksum(),
 	}
+
+	// Add metadata if provided
+	if meta != nil {
+		applied.AppliedBy = meta.AppliedBy
+		applied.DurationMS = meta.DurationMS
+		applied.Hostname = meta.Hostname
+		applied.Environment = meta.Environment
+		applied.Action = meta.Action
+		applied.Status = meta.Status
+		applied.ErrorMessage = meta.ErrorMessage
+	}
+
+	d.applied[m.Version] = applied
 
 	return nil
 }

@@ -175,12 +175,12 @@ func TestMockDriver_Lock(t *testing.T) {
 
 	// Try to run migration (should fail due to lock)
 	err := q.Up(ctx)
-	if err != queen.ErrLockTimeout {
+	if !errors.Is(err, queen.ErrLockTimeout) {
 		t.Errorf("Expected ErrLockTimeout, got %v", err)
 	}
 
 	// Unlock
-	driver.Unlock(ctx)
+	_ = driver.Unlock(ctx)
 
 	// Now it should work
 	if err := q.Up(ctx); err != nil {

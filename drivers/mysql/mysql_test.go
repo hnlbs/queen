@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -104,7 +105,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Skip("MySQL not available:", err)
 	}
 
@@ -114,7 +115,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 		_, _ = db.Exec("DROP TABLE IF EXISTS queen_migrations")
 		_, _ = db.Exec("DROP TABLE IF EXISTS test_users")
 		_, _ = db.Exec("DROP TABLE IF EXISTS test_posts")
-		db.Close()
+		_ = db.Close()
 	}
 
 	return db, cleanup
@@ -177,7 +178,7 @@ func TestIntegrationRecordAndGetApplied(t *testing.T) {
 		Name:    "create_users",
 		UpSQL:   "CREATE TABLE users (id INT)",
 	}
-	if err := driver.Record(ctx, m1); err != nil {
+	if err := driver.Record(ctx, m1, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -202,7 +203,7 @@ func TestIntegrationRecordAndGetApplied(t *testing.T) {
 		Name:    "create_posts",
 		UpSQL:   "CREATE TABLE posts (id INT)",
 	}
-	if err := driver.Record(ctx, m2); err != nil {
+	if err := driver.Record(ctx, m2, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -240,7 +241,7 @@ func TestIntegrationRemove(t *testing.T) {
 		Name:    "create_users",
 		UpSQL:   "CREATE TABLE users (id INT)",
 	}
-	if err := driver.Record(ctx, m); err != nil {
+	if err := driver.Record(ctx, m, nil); err != nil {
 		t.Fatalf("Record() failed: %v", err)
 	}
 
@@ -287,11 +288,11 @@ func TestIntegrationLocking(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open second connection: %v", err)
 	}
-	defer db2.Close()
+	defer func() { _ = db2.Close() }()
 
 	driver2 := New(db2)
 	err = driver2.Lock(ctx, 1*time.Second)
-	if err != queen.ErrLockTimeout {
+	if !errors.Is(err, queen.ErrLockTimeout) {
 		t.Errorf("expected ErrLockTimeout, got %v", err)
 	}
 
@@ -307,7 +308,7 @@ func TestIntegrationLocking(t *testing.T) {
 	}
 
 	// Clean up
-	driver2.Unlock(ctx)
+	_ = driver2.Unlock(ctx)
 }
 
 func TestIntegrationExec(t *testing.T) {
@@ -372,7 +373,7 @@ func TestIntegrationFullMigrationCycle(t *testing.T) {
 
 	driver := New(db)
 	q := queen.New(driver)
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	ctx := context.Background()
 

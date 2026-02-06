@@ -40,8 +40,8 @@ func TestAppGlobalFlags(t *testing.T) {
 	}
 
 	// Verify flags were parsed
-	if app.config.Driver != "postgres" {
-		t.Errorf("driver = %q, want %q", app.config.Driver, "postgres")
+	if app.config.Driver != DriverPostgres {
+		t.Errorf("driver = %q, want %q", app.config.Driver, DriverPostgres)
 	}
 	if app.config.DSN != "postgres://localhost/test" {
 		t.Errorf("dsn = %q, want %q", app.config.DSN, "postgres://localhost/test")
@@ -208,14 +208,14 @@ func TestLoadConfigPriority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() { _ = os.Chdir(oldWd) }()
 
 	// Save and restore environment
 	oldDriver := os.Getenv("QUEEN_DRIVER")
 	oldDSN := os.Getenv("QUEEN_DSN")
 	defer func() {
-		os.Setenv("QUEEN_DRIVER", oldDriver)
-		os.Setenv("QUEEN_DSN", oldDSN)
+		_ = os.Setenv("QUEEN_DRIVER", oldDriver)
+		_ = os.Setenv("QUEEN_DSN", oldDSN)
 	}()
 
 	if err := os.Chdir(tempDir); err != nil {
@@ -233,8 +233,8 @@ development:
 	}
 
 	// Set environment variables
-	os.Setenv("QUEEN_DRIVER", "mysql")
-	os.Setenv("QUEEN_DSN", "mysql://env/db")
+	_ = os.Setenv("QUEEN_DRIVER", "mysql")
+	_ = os.Setenv("QUEEN_DSN", "mysql://env/db")
 
 	t.Run("flags win over env and config", func(t *testing.T) {
 		app := &App{
@@ -252,8 +252,8 @@ development:
 		}
 
 		// Flags should win
-		if app.config.Driver != "postgres" {
-			t.Errorf("driver = %q, want %q (flag should win)", app.config.Driver, "postgres")
+		if app.config.Driver != DriverPostgres {
+			t.Errorf("driver = %q, want %q (flag should win)", app.config.Driver, DriverPostgres)
 		}
 		if app.config.DSN != "postgres://flag/db" {
 			t.Errorf("dsn = %q, want %q (flag should win)", app.config.DSN, "postgres://flag/db")

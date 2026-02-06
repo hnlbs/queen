@@ -19,31 +19,6 @@ func (app *App) planCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plan",
 		Short: "Show migration execution plan",
-		Long: `Show migration execution plan without applying changes (dry-run mode).
-
-This command previews which migrations will be applied or rolled back
-without actually modifying the database.
-
-Direction:
-  - up (default): Show pending migrations that will be applied
-  - down: Show applied migrations that can be rolled back
-
-Output format:
-  - Table format (default): human-readable table with warnings
-  - JSON format (--json): machine-readable JSON output for CI/CD
-
-Examples:
-  # Show pending migrations (up)
-  migrate plan
-
-  # Show what would be rolled back
-  migrate plan --direction down
-
-  # Show next 3 pending migrations
-  migrate plan --limit 3
-
-  # JSON output for CI/CD
-  migrate plan --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
@@ -92,7 +67,7 @@ func (app *App) outputPlanTable(plans []queen.MigrationPlan, direction string) e
 
 	for _, plan := range plans {
 		arrow := "→"
-		if direction == "down" {
+		if direction == queen.DirectionDown {
 			arrow = "←"
 		}
 
