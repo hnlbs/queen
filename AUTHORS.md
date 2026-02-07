@@ -17,5 +17,5 @@ source control or https://github.com/honeynil/queen/graphs/contributors
 
 - **[@Higurashi09473](https://github.com/Higurashi09473)** - Initial ClickHouse driver implementation
 
-### ClickHouse Driver
+### CockroachDB Driver
 - **[@Higurashi09473](https://github.com/Higurashi09473)** - Initial CockroachDB driver implementation
