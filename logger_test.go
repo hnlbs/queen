@@ -54,8 +54,6 @@ func TestDefaultLogger(t *testing.T) {
 	if _, ok := logger.(*noopLogger); !ok {
 		t.Errorf("defaultLogger() type = %T, want *noopLogger", logger)
 	}
-
-	var _ Logger = logger
 }
 
 type testLogger struct {

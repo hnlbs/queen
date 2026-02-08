@@ -282,7 +282,6 @@ func TestRemove(t *testing.T) {
 }
 
 func TestLocking(t *testing.T) {
-
 	db, cleanup := setupTestDBFile(t)
 	defer cleanup()
 
@@ -454,7 +453,6 @@ func TestFullMigrationCycle(t *testing.T) {
 }
 
 func TestWALMode(t *testing.T) {
-
 	tmpfile, err := os.CreateTemp("", "queen-wal-test-*.db")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
