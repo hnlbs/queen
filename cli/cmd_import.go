@@ -92,7 +92,7 @@ func importFromGoose(sourcePath, output string, dryRun bool) error {
 
 		parts := strings.SplitN(basename, "_", 2)
 		if len(parts) < 2 {
-			fmt.Printf("  ⚠ Skipping %s (invalid format)\n", basename)
+			fmt.Printf("  WARNING: Skipping %s (invalid format)\n", basename)
 			continue
 		}
 
@@ -101,7 +101,7 @@ func importFromGoose(sourcePath, output string, dryRun bool) error {
 
 		content, err := os.ReadFile(file)
 		if err != nil {
-			fmt.Printf("  ⚠ Skipping %s (failed to read)\n", basename)
+			fmt.Printf("  WARNING: Skipping %s (failed to read)\n", basename)
 			continue
 		}
 
@@ -115,7 +115,7 @@ func importFromGoose(sourcePath, output string, dryRun bool) error {
 			downSQL: downSQL,
 		})
 
-		fmt.Printf("  ✓ %s\n", basename)
+		fmt.Printf("  %s\n", basename)
 		if dryRun {
 			fmt.Printf("    Version: %s, Name: %s\n", version, namePart)
 		}
@@ -160,7 +160,7 @@ func importFromGoose(sourcePath, output string, dryRun bool) error {
 			return fmt.Errorf("failed to write %s: %w", filename, err)
 		}
 
-		fmt.Printf("  ✓ Created %s\n", filename)
+		fmt.Printf("  Created %s\n", filename)
 		registrationCalls = append(registrationCalls, fmt.Sprintf("\t%s(q)", funcName))
 	}
 
@@ -171,9 +171,9 @@ func importFromGoose(sourcePath, output string, dryRun bool) error {
 		return fmt.Errorf("failed to write migrations.go: %w", err)
 	}
 
-	fmt.Printf("  ✓ Created migrations.go\n")
+	fmt.Printf("  Created migrations.go\n")
 	fmt.Println()
-	fmt.Printf("✓ Successfully imported %d migration(s) from goose\n", len(migrations))
+	fmt.Printf("Successfully imported %d migration(s) from goose\n", len(migrations))
 	fmt.Println()
 	fmt.Println("Next steps:")
 	fmt.Println("  1. Review the generated files in", output+"/")

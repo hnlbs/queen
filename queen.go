@@ -16,12 +16,10 @@ import (
 )
 
 const (
-	// DirectionUp indicates migration application (pending -> applied).
-	DirectionUp = "up"
-	// DirectionDown indicates migration rollback (applied -> pending).
-	DirectionDown = "down"
-	// DriverUnknown represents an unknown or unsupported driver.
-	DriverUnknown = "unknown"
+	DirectionUp       = "up"
+	DirectionDown     = "down"
+	DriverUnknown     = "unknown"
+	driverNameUnknown = "DriverUnknown"
 )
 
 // Queen manages database migrations.
@@ -461,7 +459,7 @@ func (q *Queen) lock(ctx context.Context) (func(), error) {
 // getDriverName returns the driver name for error context.
 func (q *Queen) getDriverName() string {
 	if q.driver == nil {
-		return "DriverUnknown"
+		return driverNameUnknown
 	}
 
 	driverType := fmt.Sprintf("%T", q.driver)
@@ -476,7 +474,7 @@ func (q *Queen) getDriverName() string {
 		return driverType
 	}
 
-	return "DriverUnknown"
+	return driverNameUnknown
 }
 
 func (q *Queen) loadApplied(ctx context.Context) error {

@@ -355,14 +355,14 @@ func outputDoctorTable(results []DoctorResult) error {
 	fmt.Printf("Summary: %d statusPassed, %d statusWarnings, %d statusFailed\n", statusPassed, statusWarnings, statusFailed)
 
 	if statusFailed > 0 {
-		fmt.Println("\n⚠  Some checks statusFailed. Review the issues above.")
+		fmt.Println("\nWARNING: Some checks statusFailed. Review the issues above.")
 		return fmt.Errorf("health check statusFailed")
 	}
 
 	if statusWarnings > 0 {
-		fmt.Println("\n⚠  Some checks have statusWarnings. Review recommended.")
+		fmt.Println("\nWARNING: Some checks have statusWarnings. Review recommended.")
 	} else {
-		fmt.Println("\n✓ All checks statusPassed!")
+		fmt.Println("\nAll checks statusPassed!")
 	}
 
 	return nil

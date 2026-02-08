@@ -89,11 +89,11 @@ func (m *Model) renderMigrationsView() string {
 		s.WriteString("\n")
 		switch m.messageType {
 		case MessageSuccess:
-			s.WriteString(AppliedStyle.Render("✓ " + m.message))
+			s.WriteString(AppliedStyle.Render("" + m.message))
 		case MessageWarning:
-			s.WriteString(PendingStyle.Render("⚠ " + m.message))
+			s.WriteString(PendingStyle.Render("WARNING: " + m.message))
 		case MessageError:
-			s.WriteString(ErrorStyle.Render("✗ " + m.message))
+			s.WriteString(ErrorStyle.Render("ERROR: " + m.message))
 		default:
 			s.WriteString(m.message)
 		}
@@ -143,7 +143,7 @@ func (m *Model) renderGapsView() string {
 	)
 
 	if len(m.gaps) == 0 {
-		statsContent = AppliedStyle.Render("✓ No gaps detected - migrations are clean!")
+		statsContent = AppliedStyle.Render("No gaps detected - migrations are clean!")
 	}
 
 	statsBox := InfoBoxStyle.Render(statsContent)
@@ -210,11 +210,11 @@ func (m *Model) renderGapsView() string {
 		s.WriteString("\n")
 		switch m.messageType {
 		case MessageSuccess:
-			s.WriteString(AppliedStyle.Render("✓ " + m.message))
+			s.WriteString(AppliedStyle.Render("" + m.message))
 		case MessageWarning:
-			s.WriteString(PendingStyle.Render("⚠ " + m.message))
+			s.WriteString(PendingStyle.Render("WARNING: " + m.message))
 		case MessageError:
-			s.WriteString(ErrorStyle.Render("✗ " + m.message))
+			s.WriteString(ErrorStyle.Render("ERROR: " + m.message))
 		default:
 			s.WriteString(m.message)
 		}
@@ -239,7 +239,7 @@ func (m *Model) renderHelpView() string {
 
 Navigation:
   ↑/k          Move cursor up
-  ↓/j          Move cursor down
+ /j          Move cursor down
   g            Jump to top
   G            Jump to bottom
 
@@ -262,7 +262,7 @@ General:
   q/Ctrl+C     Quit
 
 Tips:
-  • Applied migrations are shown with ✓ in green
+  • Applied migrations are shown with in green
   • Pending migrations are shown with ○ in yellow
   • Gaps are detected automatically and shown in the gaps view
   • Use 'i' to ignore gaps that are intentional

@@ -47,19 +47,19 @@ func initializeProject(driver string, withConfig bool, migrationsDir string) err
 	if err := os.MkdirAll(migrationsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create migrations directory: %w", err)
 	}
-	fmt.Printf("✓ Created directory: %s/\n", migrationsDir)
+	fmt.Printf("Created directory: %s/\n", migrationsDir)
 
 	migrationsFile := filepath.Join(migrationsDir, "migrations.go")
 	if err := createMigrationsFile(migrationsFile, driver); err != nil {
 		return fmt.Errorf("failed to create migrations.go: %w", err)
 	}
-	fmt.Printf("✓ Created file: %s\n", migrationsFile)
+	fmt.Printf("Created file: %s\n", migrationsFile)
 
 	exampleFile := filepath.Join(migrationsDir, "001_initial_schema.go")
 	if err := createExampleMigration(exampleFile); err != nil {
 		return fmt.Errorf("failed to create example migration: %w", err)
 	}
-	fmt.Printf("✓ Created file: %s\n", exampleFile)
+	fmt.Printf("Created file: %s\n", exampleFile)
 
 	cmdDir := filepath.Join("cmd", "migrate")
 	if err := os.MkdirAll(cmdDir, 0755); err != nil {
@@ -69,17 +69,17 @@ func initializeProject(driver string, withConfig bool, migrationsDir string) err
 	if err := createMainFile(mainFile, migrationsDir); err != nil {
 		return fmt.Errorf("failed to create main.go: %w", err)
 	}
-	fmt.Printf("✓ Created file: %s\n", mainFile)
+	fmt.Printf("Created file: %s\n", mainFile)
 
 	if withConfig {
 		if err := createConfigFile(driver); err != nil {
 			return fmt.Errorf("failed to create .queen.yaml: %w", err)
 		}
-		fmt.Println("✓ Created file: .queen.yaml")
+		fmt.Println("Created file: .queen.yaml")
 	}
 
 	fmt.Println()
-	fmt.Println("✓ Initialization complete!")
+	fmt.Println("Initialization complete!")
 	fmt.Println()
 	fmt.Println("Next steps:")
 	fmt.Println("  1. Update your database connection in cmd/migrate/main.go")
