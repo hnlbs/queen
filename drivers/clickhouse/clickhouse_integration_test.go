@@ -22,18 +22,22 @@ func setupClickHouse(t *testing.T) (*sql.DB, func()) {
 
 	ctx := context.Background()
 
-	// Create ClickHouse container
 	req := testcontainers.ContainerRequest{
 		Image:        "clickhouse/clickhouse-server:latest",
 		ExposedPorts: []string{"9000/tcp", "8123/tcp"},
-		WaitingFor: wait.ForHTTP("/ping").
-			WithPort("8123/tcp").
-			WithStartupTimeout(90 * time.Second),
+		Env: map[string]string{
+			"CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT": "1",
+		},
+		WaitingFor: wait.ForAll(
+			wait.ForHTTP("/ping").WithPort("8123/tcp"),
+			wait.ForListeningPort("9000/tcp"),
+		).WithDeadline(90 * time.Second),
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
+		Logger:           helpers.NopLogger{},
 	})
 	if err != nil {
 		t.Fatalf("failed to start clickhouse container: %v", err)
@@ -55,7 +59,7 @@ func setupClickHouse(t *testing.T) (*sql.DB, func()) {
 		t.Fatalf("failed to connect to clickhouse: %v", err)
 	}
 
-	helpers.WaitForDB(t, db, 30*time.Second)
+	helpers.WaitForDB(t, db, 60*time.Second)
 
 	cleanup := func() {
 		_ = db.Close()

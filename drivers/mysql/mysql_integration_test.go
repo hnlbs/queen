@@ -36,6 +36,7 @@ func setupMySQL(t *testing.T) (*sql.DB, string, func()) {
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
+		Logger:           helpers.NopLogger{},
 	})
 	if err != nil {
 		t.Fatalf("failed to start mysql container: %v", err)

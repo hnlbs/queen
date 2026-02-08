@@ -51,11 +51,13 @@ var TestMigration003 = queen.M{
 	`,
 }
 
-// CleanupDB drops all tables and Queen metadata
+type NopLogger struct{}
+
+func (NopLogger) Printf(string, ...any) {}
+
 func CleanupDB(t *testing.T, db *sql.DB, tableName string) {
 	t.Helper()
 
-	// Try to drop common test tables
 	tables := []string{"users", "posts", "comments", tableName}
 	for _, table := range tables {
 		_, _ = db.Exec("DROP TABLE IF EXISTS " + table)
