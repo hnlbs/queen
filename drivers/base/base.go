@@ -206,7 +206,7 @@ func PlaceholderAtSign(n int) string {
 }
 
 // ParseTimeISO8601 parses time from ISO8601 string format.
-func ParseTimeISO8601(src interface{}) (time.Time, error) {
+func ParseTimeISO8601(src any) (time.Time, error) {
 	str, ok := src.(string)
 	if !ok {
 		return time.Time{}, fmt.Errorf("expected string, got %T", src)

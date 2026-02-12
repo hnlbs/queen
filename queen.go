@@ -1,5 +1,4 @@
 // Package queen provides a lightweight database migration library for Go.
-// Migrations are defined as code, not files, providing type safety and better testing.
 package queen
 
 import (
@@ -436,6 +435,16 @@ func (q *Queen) Close() error {
 // Driver returns the underlying database driver.
 func (q *Queen) Driver() Driver {
 	return q.driver
+}
+
+// FindMigration returns a registered migration by version, or nil if not found.
+func (q *Queen) FindMigration(version string) *Migration {
+	for _, m := range q.migrations {
+		if m.Version == version {
+			return m
+		}
+	}
+	return nil
 }
 
 // lock acquires a migration lock and returns an unlock function.

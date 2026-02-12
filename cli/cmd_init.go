@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/honeynil/queen/cli/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -231,9 +233,22 @@ environments:
 }
 
 func runInteractiveInit() error {
-	fmt.Println("Queen Interactive Setup")
-	fmt.Println("=======================")
-	fmt.Println()
+	model := tui.NewInitModel()
 
-	return fmt.Errorf("interactive mode not yet implemented")
+	p := tea.NewProgram(
+		model,
+		tea.WithAltScreen(),
+	)
+
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("failed to start interactive setup: %w", err)
+	}
+
+	result := model.Result()
+	if result == nil || !result.Confirmed {
+		fmt.Println("Setup cancelled.")
+		return nil
+	}
+
+	return initializeProject(result.Driver, result.WithConfig, result.MigrationsDir)
 }

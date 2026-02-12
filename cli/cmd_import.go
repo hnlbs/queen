@@ -24,7 +24,7 @@ func (app *App) importCmd() *cobra.Command {
 			sourcePath := args[0]
 
 			if fromTool == "" {
-				return fmt.Errorf("--from flag is required (goose, golang-migrate, flyway, liquibase)")
+				return fmt.Errorf("--from flag is required (goose)")
 			}
 
 			if output == "" {
@@ -48,15 +48,13 @@ func (app *App) importCmd() *cobra.Command {
 			switch fromTool {
 			case "goose":
 				return importFromGoose(sourcePath, output, dryRun)
-			case "golang-migrate":
-				return importFromGolangMigrate(sourcePath, output, dryRun)
 			default:
-				return fmt.Errorf("unsupported tool: %s", fromTool)
+				return fmt.Errorf("unsupported tool: %s (supported: goose)", fromTool)
 			}
 		},
 	}
 
-	cmd.Flags().StringVar(&fromTool, "from", "", "Migration tool to import from (goose, golang-migrate, flyway, liquibase)")
+	cmd.Flags().StringVar(&fromTool, "from", "", "Migration tool to import from (goose)")
 	cmd.Flags().StringVar(&output, "output", "", "Output directory for Queen migrations (default: migrations)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview import without making changes")
 
@@ -257,35 +255,3 @@ func Register(q *queen.Queen) {
 `, registrationCalls)
 }
 
-func importFromGolangMigrate(sourcePath, _ string, dryRun bool) error {
-	fmt.Println("Golang-migrate import...")
-
-	upFiles, err := filepath.Glob(filepath.Join(sourcePath, "*.up.sql"))
-	if err != nil {
-		return fmt.Errorf("failed to scan files: %w", err)
-	}
-
-	if len(upFiles) == 0 {
-		return fmt.Errorf("no golang-migrate files found in %s", sourcePath)
-	}
-
-	fmt.Printf("Found %d up migration(s)\n\n", len(upFiles))
-
-	for _, upFile := range upFiles {
-		basename := filepath.Base(upFile)
-		downFile := strings.Replace(upFile, ".up.sql", ".down.sql", 1)
-
-		fmt.Printf("  • %s\n", basename)
-		if _, err := os.Stat(downFile); err == nil {
-			fmt.Printf("    (with down migration)\n")
-		}
-	}
-
-	if dryRun {
-		fmt.Println()
-		fmt.Println("Run without --dry-run to execute conversion")
-		return nil
-	}
-
-	return fmt.Errorf("golang-migrate import not yet fully implemented - coming soon")
-}
