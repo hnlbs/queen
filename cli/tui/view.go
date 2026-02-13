@@ -426,7 +426,7 @@ func (m *Model) renderHelpView() string {
 		width = 80
 	}
 
-	var sections []string
+	sections := make([]string, 0, 7)
 	sections = append(sections, m.renderHeader(width))
 	sections = append(sections, m.renderTabBar(width))
 	sections = append(sections, separator(width))

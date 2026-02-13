@@ -433,7 +433,7 @@ func attemptAutoFix(_ context.Context, _ *queen.Queen, results []DoctorResult) [
 
 		switch result.Check {
 		case "Gap Detection":
-			var commands []string
+			commands := make([]string, 0, 2)
 			commands = append(commands, "queen gap detect    # see gap details")
 			commands = append(commands, "queen gap fill      # fill detected gaps")
 			fixes = append(fixes, DoctorResult{
