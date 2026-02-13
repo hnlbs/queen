@@ -261,4 +261,3 @@ func Register(q *queen.Queen) {
 }
 `, registrationCalls)
 }
-
