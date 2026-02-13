@@ -156,6 +156,15 @@ var (
 				Bold(true)
 )
 
+// UI symbols
+const (
+	iconCursor   = "❯ "
+	iconSelected = "●"
+	iconEmpty    = "○"
+	keyDown      = "down"
+	keyEnter     = "enter"
+)
+
 func separator(width int) string {
 	return SeparatorStyle.Render(strings.Repeat("─", width))
 }

@@ -126,11 +126,11 @@ func (m *InitModel) updateDriverStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor > 0 {
 			m.cursor--
 		}
-	case "down", "j":
+	case keyDown, "j":
 		if m.cursor < len(m.drivers)-1 {
 			m.cursor++
 		}
-	case "enter":
+	case keyEnter:
 		m.selectedDriver = m.cursor
 		m.step = stepMigrationsDir
 		m.dirInput.Focus()
@@ -141,7 +141,7 @@ func (m *InitModel) updateDriverStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *InitModel) updateDirStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "enter":
+	case keyEnter:
 		if m.dirInput.Value() == "" {
 			m.dirInput.SetValue("migrations")
 		}
@@ -158,9 +158,9 @@ func (m *InitModel) updateDirStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *InitModel) updateConfigStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "up", "k", "down", "j":
+	case "up", "k", keyDown, "j":
 		m.withConfig = !m.withConfig
-	case "enter":
+	case keyEnter:
 		m.step = stepConfirm
 		return m, nil
 	}
@@ -169,7 +169,7 @@ func (m *InitModel) updateConfigStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *InitModel) updateConfirmStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "enter", "y":
+	case keyEnter, "y":
 		m.result = &InitResult{
 			Driver:        m.drivers[m.selectedDriver].name,
 			MigrationsDir: m.dirInput.Value(),
@@ -267,13 +267,13 @@ func (m *InitModel) renderDriverStep() string {
 	for i, d := range m.drivers {
 		cursor := "  "
 		if i == m.cursor {
-			cursor = "❯ "
+			cursor = iconCursor
 		}
 
-		icon := "○"
+		icon := iconEmpty
 		nameStyle := NameStyle
 		if i == m.cursor {
-			icon = "●"
+			icon = iconSelected
 			nameStyle = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
 		}
 
@@ -305,13 +305,13 @@ func (m *InitModel) renderConfigStep() string {
 	s.WriteString(TitleStyle.Render("  Create .queen.yaml configuration file?"))
 	s.WriteString("\n\n")
 
-	yesIcon, noIcon := "○", "○"
+	yesIcon, noIcon := iconEmpty, iconEmpty
 	yesStyle, noStyle := NameStyle, NameStyle
 	if m.withConfig {
-		yesIcon = "●"
+		yesIcon = iconSelected
 		yesStyle = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
 	} else {
-		noIcon = "●"
+		noIcon = iconSelected
 		noStyle = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
 	}
 

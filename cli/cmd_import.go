@@ -142,12 +142,19 @@ func importFromGoose(sourcePath, output string, dryRun bool) error {
 	for i, m := range migrations {
 		queenVersion := fmt.Sprintf("%03d", i+1)
 		filename := fmt.Sprintf("%s_%s.go", queenVersion, m.name)
-		funcName := fmt.Sprintf("Register%s%s", strings.ToUpper(queenVersion[:1]), queenVersion[1:])
+		funcName := "Register" + queenVersion
+		capitalizeNext := true
 		for _, r := range m.name {
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			if r == '_' || r == '-' {
+				capitalizeNext = true
+				continue
+			}
+			if capitalizeNext && r >= 'a' && r <= 'z' {
+				funcName += string(r - 32) // to uppercase
+				capitalizeNext = false
+			} else if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
 				funcName += string(r)
-			} else if r == '_' || r == '-' {
-				funcName += "_"
+				capitalizeNext = false
 			}
 		}
 

@@ -97,7 +97,7 @@ func (m *Model) renderFooter(width int) string {
 		}
 	}
 
-	var parts []string
+	parts := make([]string, 0, len(bindings))
 	for _, b := range bindings {
 		parts = append(parts, FooterKeyStyle.Render(b.key)+" "+FooterDescStyle.Render(b.desc))
 	}
@@ -215,14 +215,14 @@ func (m *Model) renderMigrationsList(width int) string {
 
 		cursor := "  "
 		if i == m.cursor {
-			cursor = "❯ "
+			cursor = iconCursor
 		}
 
 		// Status icon
-		statusIcon := "○"
+		statusIcon := iconEmpty
 		statusStyle := PendingStyle
 		if mig.Status == queen.StatusApplied {
-			statusIcon = "●"
+			statusIcon = iconSelected
 			statusStyle = AppliedStyle
 		}
 
@@ -356,7 +356,7 @@ func (m *Model) renderGapsList(width int) string {
 
 		cursor := "  "
 		if i == m.cursor {
-			cursor = "❯ "
+			cursor = iconCursor
 		}
 
 		icon := "⚠"
