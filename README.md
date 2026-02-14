@@ -18,7 +18,77 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="License"></a>
 </p>
 
-# Docs in progress...
+
+## Features
+
+**Migrations as Code** - Type-safe Go structs with compile-time validation. No external files to manage.
+
+**SQL and Go Functions** - Pure SQL for schema changes, Go functions for complex data transformations. Both run inside transactions.
+
+**Gap Detection** - Automatically detect and resolve missing, skipped, or unregistered migrations.
+
+**6 Databases** - PostgreSQL, MySQL, SQLite, ClickHouse, CockroachDB, MS SQL Server.
+
+**Checksum Validation** - Automatic SHA-256 checksums detect when applied migrations are modified.
+
+**Rich Metadata** - Track who applied each migration, when, on which host, and how long it took.
+
+## Migration Example
+```go
+package main
+
+import (
+    "context"
+    "database/sql"
+    "log"
+
+    "github.com/honeynil/queen"
+    "github.com/honeynil/queen/drivers/postgres"
+    _ "github.com/jackc/pgx/v5/stdlib"
+)
+
+func main() {
+    db, err := sql.Open("pgx", "postgres://localhost/myapp?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    driver := postgres.New(db)
+    q := queen.New(driver)
+    defer q.Close()
+
+    q.MustAdd(queen.M{
+        Version: "001",
+        Name:    "create_users_table",
+        UpSQL: `
+            CREATE TABLE users (
+                id SERIAL PRIMARY KEY,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                name VARCHAR(255),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `,
+        DownSQL: `DROP TABLE users`,
+    })
+
+    ctx := context.Background()
+    if err := q.Up(ctx); err != nil {
+        log.Fatal("Migration failed:", err)
+    }
+
+    log.Println("All migrations applied")
+
+    statuses, err := q.Status(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    for _, s := range statuses {
+        log.Printf("Migration %s (%s): %s", s.Version, s.Name, s.Status)
+    }
+}
+```
 
 ## Supported Databases
 
