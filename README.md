@@ -103,6 +103,6 @@ func main() {
 
 ## Documentation
 
-Full documentation: [queen-wiki.honeynil.tech](https://queen-wiki.honeynil.tech)
+Full documentation: in progress
 
 Apache License 2.0
