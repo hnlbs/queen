@@ -315,16 +315,14 @@ func (m *InitModel) renderConfigStep() string {
 		noStyle = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
 	}
 
-	s.WriteString(fmt.Sprintf("  %s %s  %s\n",
+	fmt.Fprintf(&s, "  %s %s  %s\n",
 		AppliedStyle.Render(yesIcon),
 		yesStyle.Render("Yes"),
-		DetailStyle.Render("Create config with environment settings (dev/staging/production)"),
-	))
-	s.WriteString(fmt.Sprintf("  %s %s  %s\n",
+		DetailStyle.Render("Create config with environment settings (dev/staging/production)"))
+	fmt.Fprintf(&s, "  %s %s  %s\n",
 		AppliedStyle.Render(noIcon),
 		noStyle.Render("No"),
-		DetailStyle.Render("Skip config file, configure programmatically"),
-	))
+		DetailStyle.Render("Skip config file, configure programmatically"))
 
 	return s.String()
 }
@@ -335,14 +333,14 @@ func (m *InitModel) renderConfirmStep() string {
 	s.WriteString("\n\n")
 
 	driver := m.drivers[m.selectedDriver]
-	s.WriteString(fmt.Sprintf("  %s  %s\n", AppliedStyle.Render("Driver:"), VersionStyle.Render(driver.name)))
-	s.WriteString(fmt.Sprintf("  %s  %s\n", AppliedStyle.Render("Directory:"), VersionStyle.Render(m.dirInput.Value()+"/")))
+	fmt.Fprintf(&s, "  %s  %s\n", AppliedStyle.Render("Driver:"), VersionStyle.Render(driver.name))
+	fmt.Fprintf(&s, "  %s  %s\n", AppliedStyle.Render("Directory:"), VersionStyle.Render(m.dirInput.Value()+"/"))
 
 	configStr := "No"
 	if m.withConfig {
 		configStr = "Yes (.queen.yaml)"
 	}
-	s.WriteString(fmt.Sprintf("  %s  %s\n", AppliedStyle.Render("Config:"), VersionStyle.Render(configStr)))
+	fmt.Fprintf(&s, "  %s  %s\n", AppliedStyle.Render("Config:"), VersionStyle.Render(configStr))
 
 	s.WriteString("\n")
 	s.WriteString("  Files to create:\n")
